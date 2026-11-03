@@ -13,9 +13,13 @@ import (
 	"forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	packages_model "forgejo.org/models/packages"
+	"forgejo.org/models/perm"
+	access_model "forgejo.org/models/perm/access"
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
 	"forgejo.org/models/unittest"
+	user_model "forgejo.org/models/user"
+	api "forgejo.org/modules/structs"
 	"forgejo.org/tests"
 
 	"github.com/stretchr/testify/assert"
@@ -151,5 +155,67 @@ func TestDamastActionsTokenPackages(t *testing.T) {
 
 	t.Run("token of another owner's repo gets no write", func(t *testing.T) {
 		put(setTask(1, 2, false), "ci-artifact", "3.0", http.StatusUnauthorized)
+	})
+}
+
+// Phase 2: with a private owner, repository access is the only way to read a package.
+func TestDamastRepoBoundPackageRead(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+	_, err := db.GetEngine(ctx).ID(5).Cols("visibility").Update(&user_model.User{Visibility: api.VisibleTypePrivate})
+	require.NoError(t, err)
+	// user2: read-only collaborator on user5/repo4
+	require.NoError(t, db.Insert(ctx, &repo_model.Collaboration{RepoID: 4, UserID: 2, Mode: perm.AccessModeRead}))
+	require.NoError(t, db.Insert(ctx, &access_model.Access{RepoID: 4, UserID: 2, Mode: perm.AccessModeRead}))
+
+	upload := func(user, name string) {
+		t.Helper()
+		url := fmt.Sprintf("/api/packages/user5/generic/%s/1.0/file.bin", name)
+		MakeRequest(t, NewRequestWithBody(t, "PUT", url, bytes.NewReader([]byte("x"))).AddBasicAuth(user), http.StatusCreated)
+	}
+	upload("user4", "repo4")  // linked to repo4, inherits access
+	upload("user5", "secret") // not linked
+
+	type auth func(*RequestWrapper) *RequestWrapper
+	get := func(as auth, name string, status int) {
+		t.Helper()
+		MakeRequest(t, as(NewRequest(t, "GET", fmt.Sprintf("/api/packages/user5/generic/%s/1.0/file.bin", name))), status)
+	}
+	user := func(name string) auth { return func(r *RequestWrapper) *RequestWrapper { return r.AddBasicAuth(name) } }
+
+	t.Run("read collaborator reads the linked package only", func(t *testing.T) {
+		get(user("user2"), "repo4", http.StatusOK)
+		get(user("user2"), "secret", http.StatusForbidden)
+	})
+
+	t.Run("read collaborator cannot upload", func(t *testing.T) {
+		MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/generic/repo4/2.0/file.bin", bytes.NewReader([]byte("x"))).AddBasicAuth("user2"), http.StatusUnauthorized)
+	})
+
+	t.Run("users without repo access read nothing", func(t *testing.T) {
+		get(user("user8"), "repo4", http.StatusUnauthorized)
+	})
+
+	task := unittest.AssertExistsAndLoadBean(t, &actions_model.ActionTask{ID: 47})
+	setTask := func(fork bool) string {
+		task.RepoID, task.OwnerID, task.IsForkPullRequest = 4, 5, fork
+		task.GenerateToken()
+		require.NoError(t, actions_model.UpdateTask(ctx, task, "repo_id", "owner_id", "is_fork_pull_request", "token_hash", "token_salt", "token_last_eight"))
+		return task.Token
+	}
+	token := func(fork bool) auth {
+		tok := setTask(fork)
+		return func(r *RequestWrapper) *RequestWrapper { return r.AddTokenAuth(tok) }
+	}
+
+	t.Run("Actions token reads its repo's packages, also from fork PRs", func(t *testing.T) {
+		get(token(false), "repo4", http.StatusOK)
+		get(token(true), "repo4", http.StatusOK)
+		get(token(false), "secret", http.StatusForbidden)
+	})
+
+	t.Run("listing endpoints stay owner-level", func(t *testing.T) {
+		MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/npm/-/v1/search?text=repo4").AddBasicAuth("user2"), http.StatusUnauthorized)
 	})
 }

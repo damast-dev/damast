@@ -16,28 +16,41 @@ import (
 // Write routes that are not uploads; provisional access never applies to them.
 var damastNonUploadPaths = []string{"/unyank", "/yank", "/-rev/", "/dist-tags/", "/delete"}
 
-// damastProvisionalWrite grants provisional write for upload requests when owner-level access is not
-// enough but the doer may write to a repository of the owner. services/damast/packages.OnWrite then
-// checks the concrete package. DELETE and other non-upload writes keep Forgejo's owner-level rules.
-func damastProvisionalWrite(ctx *context.Context) {
-	if ctx.Package == nil || ctx.Package.Owner == nil || ctx.Package.AccessMode >= perm.AccessModeWrite || !damastIsUpload(ctx.Req) {
+// Registries whose read endpoints all work per package (descriptor or file stream), so CheckRead covers
+// them. Registries with owner-wide indexes (debian, rpm, alpine, arch, alt, cargo, composer, helm,
+// rubygems, ...) would leak other packages and keep owner-level read.
+var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true}
+
+// Read routes that list several packages or bypass descriptors; provisional read never applies to them.
+var damastListPaths = []string{"/_catalog", "/tags/list", "/-/v1/search", "/dist-tags"}
+
+// damastProvisionalAccess grants provisional access when owner-level access is not enough but the doer
+// has access to a repository of the owner: write for uploads, read for downloads/metadata of the
+// registries above. services/damast/packages (OnWrite, CheckRead) then checks the concrete package.
+// DELETE and other non-upload writes keep Forgejo's owner-level rules.
+func damastProvisionalAccess(ctx *context.Context) {
+	if ctx.Package == nil || ctx.Package.Owner == nil {
+		return
+	}
+	mode := damastRequestMode(ctx.Req)
+	if mode == perm.AccessModeNone || ctx.Package.AccessMode >= mode {
 		return
 	}
 	_, taskID := ctx.Authentication.ActionsTaskID().Get()
-	g, err := damast_packages.NewGrant(ctx, ctx.Package.Owner, ctx.Doer, taskID)
+	g, err := damast_packages.NewGrant(ctx, mode, ctx.Package.Owner, ctx.Doer, taskID)
 	if err != nil {
-		ctx.Error(http.StatusInternalServerError, "damastProvisionalWrite", err.Error())
+		ctx.Error(http.StatusInternalServerError, "damastProvisionalAccess", err.Error())
 		return
 	}
 	if g != nil {
-		ctx.Package.AccessMode = perm.AccessModeWrite
+		ctx.Package.AccessMode = mode
 		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
 		ctx.Resp = &damastDenyResponse{ResponseWriter: ctx.Resp, grant: g}
 	}
 }
 
 // damastDenyResponse turns the 500 that registry handlers send for unknown errors into a 403
-// when OnWrite rejected the request (handlers compare errors by equality, so they can't map it).
+// when Damast rejected the request (handlers compare errors by equality, so they can't map it).
 type damastDenyResponse struct {
 	context.ResponseWriter
 	grant *damast_packages.Grant
@@ -50,17 +63,30 @@ func (r *damastDenyResponse) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
-func damastIsUpload(req *http.Request) bool {
+// damastRequestMode returns the access a request may get provisionally, or AccessModeNone.
+func damastRequestMode(req *http.Request) perm.AccessMode {
+	path := strings.ToLower(strings.TrimPrefix(req.URL.Path, setting.AppSubURL))
 	switch req.Method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch:
-	default:
-		return false
-	}
-	path := strings.ToLower(strings.TrimPrefix(req.URL.Path, setting.AppSubURL))
-	for _, p := range damastNonUploadPaths {
-		if strings.Contains(path, p) {
-			return false
+		for _, p := range damastNonUploadPaths {
+			if strings.Contains(path, p) {
+				return perm.AccessModeNone
+			}
+		}
+		return perm.AccessModeWrite
+	case http.MethodGet, http.MethodHead:
+		for _, p := range damastListPaths {
+			if strings.Contains(path, p) {
+				return perm.AccessModeNone
+			}
+		}
+		if strings.HasPrefix(path, "/v2/") {
+			return perm.AccessModeRead // container
+		}
+		// /api/packages/{owner}/{type}/...
+		if parts := strings.Split(strings.TrimPrefix(path, "/api/packages/"), "/"); strings.HasPrefix(path, "/api/packages/") && len(parts) > 1 && damastReadTypes[parts[1]] {
+			return perm.AccessModeRead
 		}
 	}
-	return true
+	return perm.AccessModeNone
 }

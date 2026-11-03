@@ -35,8 +35,9 @@ type grantKey struct{}
 // GrantKey is the request context key holding a *Grant.
 var GrantKey = grantKey{}
 
-// Grant is provisional write access; OnWrite decides per package.
+// Grant is provisional access (read or write); OnWrite / CheckRead decide per package.
 type Grant struct {
+	Mode perm.AccessMode
 	Doer *user_model.User
 	Task *actions_model.ActionTask // set when authenticated with an Actions token
 
@@ -51,8 +52,8 @@ func (g *Grant) deny() error {
 	return util.ErrPermissionDenied
 }
 
-// NewGrant returns a Grant if doer may write to at least one repository of owner, or nil.
-func NewGrant(ctx context.Context, owner, doer *user_model.User, taskID int64) (*Grant, error) {
+// NewGrant returns a Grant if doer has mode (read or write) on at least one repository of owner, or nil.
+func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model.User, taskID int64) (*Grant, error) {
 	if owner == nil || doer == nil || doer.IsGhost() {
 		return nil, nil
 	}
@@ -65,20 +66,76 @@ func NewGrant(ctx context.Context, owner, doer *user_model.User, taskID int64) (
 		if err != nil {
 			return nil, err
 		}
-		// fork PRs never get package write, like GitHub
-		if task.IsForkPullRequest || repo.OwnerID != owner.ID {
+		// fork PRs never get package write, like GitHub (read is fine)
+		if repo.OwnerID != owner.ID || (task.IsForkPullRequest && mode >= perm.AccessModeWrite) {
 			return nil, nil
 		}
-		return &Grant{Doer: doer, Task: task}, nil
+		return &Grant{Mode: mode, Doer: doer, Task: task}, nil
 	}
 	has, err := db.GetEngine(ctx).Table("access").
 		Join("INNER", "repository", "repository.id = access.repo_id").
-		Where("access.user_id = ? AND repository.owner_id = ? AND access.mode >= ?", doer.ID, owner.ID, perm.AccessModeWrite).
+		Where("access.user_id = ? AND repository.owner_id = ? AND access.mode >= ?", doer.ID, owner.ID, mode).
 		Exist()
 	if err != nil || !has {
 		return nil, err
 	}
-	return &Grant{Doer: doer}, nil
+	return &Grant{Mode: mode, Doer: doer}, nil
+}
+
+func init() {
+	packages_model.DamastCheckRead = CheckRead
+}
+
+// CheckRead rejects reads under a provisional read Grant unless the reader may read the package's
+// linked repository and the package inherits repository access.
+func CheckRead(ctx context.Context, p *packages_model.Package) error {
+	g := grantFrom(ctx)
+	if g == nil || g.Mode != perm.AccessModeRead {
+		return nil
+	}
+	if p.RepoID == 0 {
+		return g.deny()
+	}
+	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+	if err != nil {
+		return err
+	}
+	if !inherit {
+		return g.deny()
+	}
+	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
+	if err != nil {
+		return err
+	}
+	var rp access_model.Permission
+	if g.Task != nil {
+		rp, err = access_model.GetActionRepoPermission(ctx, repo, g.Task)
+	} else {
+		rp, err = access_model.GetUserRepoPermission(ctx, repo, g.Doer)
+	}
+	if err != nil {
+		return err
+	}
+	if !rp.CanRead(unit.TypePackages) {
+		return g.deny()
+	}
+	return nil
+}
+
+// OnReadFile is CheckRead for file downloads.
+func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
+	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
+		return nil
+	}
+	pv, err := packages_model.GetVersionByID(ctx, pf.VersionID)
+	if err != nil {
+		return err
+	}
+	p, err := packages_model.GetPackageByID(ctx, pv.PackageID)
+	if err != nil {
+		return err
+	}
+	return CheckRead(ctx, p)
 }
 
 func grantFrom(ctx context.Context) *Grant {
@@ -105,6 +162,9 @@ func canWrite(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_m
 func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer *user_model.User, metadata any) error {
 	g := grantFrom(ctx)
 	if g != nil {
+		if g.Mode < perm.AccessModeWrite {
+			return g.deny() // a read-only request must never write
+		}
 		doer = g.Doer
 	}
 

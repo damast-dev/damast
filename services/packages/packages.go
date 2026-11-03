@@ -689,6 +689,9 @@ func GetPackageFileStream(ctx context.Context, pf *packages_model.PackageFile) (
 // GetPackageBlobStream returns the content of the specific package blob
 // If the storage supports direct serving and it's enabled, only the direct serving url is returned.
 func GetPackageBlobStream(ctx context.Context, pf *packages_model.PackageFile, pb *packages_model.PackageBlob, serveDirectReqParams url.Values) (ReadSeekCloseSizer, *url.URL, *packages_model.PackageFile, error) {
+	if err := damast_packages.OnReadFile(ctx, pf); err != nil { // DAMAST: repo-bound packages
+		return nil, nil, nil, err
+	}
 	key := packages_module.BlobHash256Key(pb.HashSHA256)
 
 	cs := packages_module.NewContentStore()

@@ -106,6 +106,11 @@ func GetPackageDescriptor(ctx context.Context, pv *PackageVersion) (*PackageDesc
 	if err != nil {
 		return nil, err
 	}
+	if DamastCheckRead != nil { // DAMAST: repo-bound packages
+		if err := DamastCheckRead(ctx, p); err != nil {
+			return nil, err
+		}
+	}
 	o, err := user_model.GetUserByID(ctx, p.OwnerID)
 	if err != nil {
 		return nil, err
