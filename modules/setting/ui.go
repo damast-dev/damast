@@ -144,9 +144,10 @@ var UI = struct {
 		Description string
 		Keywords    string
 	}{
-		Author:      "Forgejo – Beyond coding. We forge.",
-		Description: "Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance, it just does the job.",
-		Keywords:    "git,forge,forgejo",
+		// DAMAST: branding
+		Author:      "Damast – Every commit a layer.",
+		Description: "Damast is a self-hosted software forge based on Forgejo. Easy to install and low maintenance, it just does the job.",
+		Keywords:    "git,forge,damast,forgejo",
 	},
 }
 

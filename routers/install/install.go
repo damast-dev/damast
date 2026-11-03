@@ -113,8 +113,8 @@ func Install(ctx *context.Context) {
 	ctx.Data["CurDbType"] = curDBType
 
 	// Application general settings
-	form.AppName = "Forgejo"
-	form.AppSlogan = "Beyond coding. We Forge."
+	form.AppName = "Damast"                  // DAMAST: branding
+	form.AppSlogan = "Every commit a layer." // DAMAST: branding
 	form.RepoRootPath = setting.RepoRootPath
 	form.LFSRootPath = setting.LFS.Storage.Path
 	form.RunUser = setting.RunUser
