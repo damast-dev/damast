@@ -6,9 +6,9 @@
 		<div class="field">
 			<div class="ui checkbox">
 				<input id="damast-inherit" name="inherit" type="checkbox" {{if .DamastInheritRepoAccess}}checked{{end}} {{if not .CanWritePackages}}disabled{{end}}>
-				<label for="damast-inherit">Inherit write access from the linked repository</label>
+				<label for="damast-inherit">Inherit access from the linked repository</label>
 			</div>
-			<p class="help">Users and Actions workflows with write access to the linked repository can publish new versions of this package.</p>
+			<p class="help">People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.</p>
 		</div>
 		{{if .CanWritePackages}}
 		<div class="field">

@@ -3,7 +3,7 @@
 		{{if ShowFooterPoweredBy}}
 			{{/* DAMAST: branding, keeps the credit to Forgejo */}}
 			<a target="_blank" rel="noopener noreferrer" href="https://damast.dev">{{ctx.Locale.Tr "powered_by" "Damast"}}</a>
-			(<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org">Forgejo</a>)
+			<span>(<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org">Forgejo</a>)</span>
 		{{end}}
 		{{if (or .ShowFooterVersion .PageIsAdmin)}}
 			{{ctx.Locale.Tr "version"}}:
