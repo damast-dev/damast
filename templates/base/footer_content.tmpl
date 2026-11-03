@@ -1,7 +1,9 @@
 <footer class="page-footer" role="group" aria-label="{{ctx.Locale.Tr "aria.footer"}}">
 	<div class="left-links" role="contentinfo" aria-label="{{ctx.Locale.Tr "aria.footer.software"}}">
 		{{if ShowFooterPoweredBy}}
-			<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org">{{ctx.Locale.Tr "powered_by" "Forgejo"}}</a>
+			{{/* DAMAST: branding, keeps the credit to Forgejo */}}
+			<a target="_blank" rel="noopener noreferrer" href="https://damast.dev">{{ctx.Locale.Tr "powered_by" "Damast"}}</a>
+			(<a target="_blank" rel="noopener noreferrer" href="https://forgejo.org">Forgejo</a>)
 		{{end}}
 		{{if (or .ShowFooterVersion .PageIsAdmin)}}
 			{{ctx.Locale.Tr "version"}}:
