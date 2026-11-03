@@ -10,7 +10,9 @@ Docs, designs and tasks live in Jira project **MAST** (jinc.atlassian.net), not 
    Never reformat or reorder upstream code.
 2. **Never change upstream tables or the upstream migration chain** (`models/migrations`, `models/gitea_migrations`,
    `models/forgejo_migrations*`). Forgejo refuses to start if `forgejo_migration` contains unknown IDs.
-   New data goes in `damast_*` tables, migrated by the separate `damast_migration` track (MAST-12).
+   New data goes in `damast_*` tables in `models/damast`, registered with `db.RegisterModel`; Forgejo's
+   `SyncAllTables` creates them on every start. A separate `damast_migration` track (MAST-12) is only added
+   once a real data migration is needed.
    New config goes in an `[damast]` section of `app.ini` only.
 3. **No Forgejo branding** in our name/logo (trademark). Keep attribution and license (GPL-3.0-or-later).
 4. Code, comments and commit messages in English. Commits end with

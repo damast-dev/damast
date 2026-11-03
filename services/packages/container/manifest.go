@@ -24,6 +24,7 @@ import (
 	container_module "forgejo.org/modules/packages/container"
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/util"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	notify_service "forgejo.org/services/notify"
 	packages_service "forgejo.org/services/packages"
 
@@ -413,6 +414,9 @@ func createPackageAndVersion(ctx context.Context, mci ManifestCreationInfo, meta
 			log.Error("Error setting package property %s: %v", container_module.PropertyRepositoryAutolinkingPending, err)
 			return nil, err
 		}
+	}
+	if err := damast_packages.OnWrite(ctx, p, created, mci.Creator, metadata); err != nil { // DAMAST: repo-bound packages
+		return nil, err
 	}
 
 	// Check if auto-linking is required (this only happens after creation of package (not version!))

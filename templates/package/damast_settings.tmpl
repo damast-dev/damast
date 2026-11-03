@@ -1,0 +1,19 @@
+{{/* DAMAST: repo-bound package access. shortcut: English only, move strings to locale_next when upstreaming. */}}
+<h4 class="ui top attached header">Repository access</h4>
+<div class="ui attached segment">
+	<form class="ui form" action="{{.Link}}" method="post">
+		<input type="hidden" name="action" value="damast_inherit">
+		<div class="field">
+			<div class="ui checkbox">
+				<input id="damast-inherit" name="inherit" type="checkbox" {{if .DamastInheritRepoAccess}}checked{{end}} {{if not .CanWritePackages}}disabled{{end}}>
+				<label for="damast-inherit">Inherit write access from the linked repository</label>
+			</div>
+			<p class="help">Users and Actions workflows with write access to the linked repository can publish new versions of this package.</p>
+		</div>
+		{{if .CanWritePackages}}
+		<div class="field">
+			<button class="ui primary button">Save</button>
+		</div>
+		{{end}}
+	</form>
+</div>

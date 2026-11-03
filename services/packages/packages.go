@@ -22,6 +22,7 @@ import (
 	packages_module "forgejo.org/modules/packages"
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/storage"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	notify_service "forgejo.org/services/notify"
 
 	"code.forgejo.org/xorm/xorm"
@@ -185,6 +186,9 @@ func createPackageAndVersion(ctx context.Context, pvci *PackageCreationInfo, all
 			return nil, false, err
 		}
 	}
+	if err := damast_packages.OnWrite(ctx, p, packageCreated, pvci.Creator, pvci.Metadata); err != nil { // DAMAST: repo-bound packages
+		return nil, false, err
+	}
 
 	if packageCreated {
 		for name, value := range pvci.PackageProperties {
@@ -243,6 +247,9 @@ func AddFileToExistingPackage(ctx context.Context, pvi *PackageInfo, pfci *Packa
 	return addFileToPackageWrapper(ctx, func(ctx context.Context) (*packages_model.PackageFile, *packages_model.PackageBlob, bool, error) {
 		pv, err := packages_model.GetVersionByNameAndVersion(ctx, pvi.Owner.ID, pvi.PackageType, pvi.Name, pvi.Version)
 		if err != nil {
+			return nil, nil, false, err
+		}
+		if err := damast_packages.OnWriteVersion(ctx, pv, pfci.Creator); err != nil { // DAMAST: repo-bound packages
 			return nil, nil, false, err
 		}
 
@@ -682,6 +689,9 @@ func GetPackageFileStream(ctx context.Context, pf *packages_model.PackageFile) (
 // GetPackageBlobStream returns the content of the specific package blob
 // If the storage supports direct serving and it's enabled, only the direct serving url is returned.
 func GetPackageBlobStream(ctx context.Context, pf *packages_model.PackageFile, pb *packages_model.PackageBlob, serveDirectReqParams url.Values) (ReadSeekCloseSizer, *url.URL, *packages_model.PackageFile, error) {
+	if err := damast_packages.OnReadFile(ctx, pf); err != nil { // DAMAST: repo-bound packages
+		return nil, nil, nil, err
+	}
 	key := packages_module.BlobHash256Key(pb.HashSHA256)
 
 	cs := packages_module.NewContentStore()

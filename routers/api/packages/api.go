@@ -836,7 +836,7 @@ func CommonRoutes() *web.Route {
 				})
 			})
 		}, reqPackageAccess(perm.AccessModeRead))
-	}, context.UserAssignmentWeb(), context.PackageAssignment())
+	}, context.UserAssignmentWeb(), context.PackageAssignment(), damastProvisionalAccess) // DAMAST: repo-bound package access
 
 	return r
 }
@@ -1033,7 +1033,7 @@ func ContainerRoutes() *web.Route {
 
 			ctx.Status(http.StatusNotFound)
 		})
-	}, container.ReqContainerAccess, context.UserAssignmentWeb(), context.PackageAssignment(), reqPackageAccess(perm.AccessModeRead))
+	}, container.ReqContainerAccess, context.UserAssignmentWeb(), context.PackageAssignment(), damastProvisionalAccess, reqPackageAccess(perm.AccessModeRead)) // DAMAST: repo-bound package access
 
 	return r
 }
