@@ -25,6 +25,7 @@
 									{{ctx.AvatarUtils.AvatarByEmail .Author.Email .Author.Name 28 "tw-mr-2"}}
 									<span class="author-wrapper">{{$userName}}</span>
 								{{end}}
+								{{template "repo/damast/coauthors" (dict "Commit" .Commit "Size" 20)}}{{/* DAMAST: */}}
 							</div>
 						</td>
 						<td class="sha">

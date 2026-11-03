@@ -10,6 +10,7 @@
 		{{else}}
 			{{ctx.AvatarUtils.AvatarByEmail .Author.Email .Author.Name 20}}
 		{{end}}
+		{{template "repo/damast/coauthors" (dict "Commit" .Commit "Size" 20)}}{{/* DAMAST: */}}
 
 		{{$commitLink := printf "%s/commit/%s" $.comment.Issue.PullRequest.BaseRepo.Link (PathEscape .ID.String)}}
 
