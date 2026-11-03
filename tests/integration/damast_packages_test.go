@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"testing"
 
+	actions_model "forgejo.org/models/actions"
 	"forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	packages_model "forgejo.org/models/packages"
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
+	"forgejo.org/models/unittest"
 	"forgejo.org/tests"
 
 	"github.com/stretchr/testify/assert"
@@ -107,5 +109,47 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, inherit)
 		put("user4", "repo4", "3.0", http.StatusForbidden)
+	})
+}
+
+// Actions task 47 (fixtures) runs in user5/repo4.
+func TestDamastActionsTokenPackages(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+
+	task := unittest.AssertExistsAndLoadBean(t, &actions_model.ActionTask{ID: 47})
+	setTask := func(repoID, ownerID int64, fork bool) string {
+		t.Helper()
+		task.RepoID, task.OwnerID, task.IsForkPullRequest = repoID, ownerID, fork
+		task.GenerateToken()
+		require.NoError(t, actions_model.UpdateTask(ctx, task, "repo_id", "owner_id", "is_fork_pull_request", "token_hash", "token_salt", "token_last_eight"))
+		return task.Token
+	}
+	put := func(token, name, version string, status int) {
+		t.Helper()
+		url := fmt.Sprintf("/api/packages/user5/generic/%s/%s/file.bin", name, version)
+		MakeRequest(t, NewRequestWithBody(t, "PUT", url, bytes.NewReader([]byte("x"))).AddTokenAuth(token), status)
+	}
+
+	t.Run("token of a repo publishes to its owner and links the package to the run's repo", func(t *testing.T) {
+		put(setTask(4, 5, false), "ci-artifact", "1.0", http.StatusCreated)
+		p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeGeneric, "ci-artifact")
+		require.NoError(t, err)
+		assert.EqualValues(t, 4, p.RepoID)
+		put(task.Token, "ci-artifact", "1.1", http.StatusCreated)
+	})
+
+	t.Run("token cannot touch packages not linked to its repo", func(t *testing.T) {
+		MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/generic/manual/1.0/file.bin", bytes.NewReader([]byte("x"))).AddBasicAuth("user5"), http.StatusCreated)
+		put(setTask(4, 5, false), "manual", "1.1", http.StatusForbidden)
+	})
+
+	t.Run("fork pull request runs get no write", func(t *testing.T) {
+		put(setTask(4, 5, true), "ci-artifact", "2.0", http.StatusUnauthorized)
+	})
+
+	t.Run("token of another owner's repo gets no write", func(t *testing.T) {
+		put(setTask(1, 2, false), "ci-artifact", "3.0", http.StatusUnauthorized)
 	})
 }
