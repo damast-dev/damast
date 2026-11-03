@@ -84,6 +84,7 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 
 func init() {
 	packages_model.DamastCheckRead = CheckRead
+	packages_model.DamastCheckReadFile = OnReadFile
 }
 
 // CheckRead rejects reads under a provisional read Grant unless the reader may read the package's
@@ -123,6 +124,7 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 }
 
 // OnReadFile is CheckRead for file downloads.
+// shortcut: loads version and package per file (only under a read grant), cache per request if it shows up in profiles.
 func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
 		return nil

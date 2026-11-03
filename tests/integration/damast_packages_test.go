@@ -5,6 +5,7 @@ package integration
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"testing"
@@ -186,7 +187,8 @@ func TestDamastRepoBoundPackageRead(t *testing.T) {
 
 	t.Run("read collaborator reads the linked package only", func(t *testing.T) {
 		get(user("user2"), "repo4", http.StatusOK)
-		get(user("user2"), "secret", http.StatusForbidden)
+		get(user("user2"), "secret", http.StatusNotFound) // same as a missing package
+		get(user("user2"), "missing", http.StatusNotFound)
 	})
 
 	t.Run("read collaborator cannot upload", func(t *testing.T) {
@@ -212,7 +214,31 @@ func TestDamastRepoBoundPackageRead(t *testing.T) {
 	t.Run("Actions token reads its repo's packages, also from fork PRs", func(t *testing.T) {
 		get(token(false), "repo4", http.StatusOK)
 		get(token(true), "repo4", http.StatusOK)
-		get(token(false), "secret", http.StatusForbidden)
+		get(token(false), "secret", http.StatusNotFound)
+	})
+
+	t.Run("container HEAD and GET don't reveal unreadable images", func(t *testing.T) {
+		v2token := func(user string) string {
+			t.Helper()
+			resp := MakeRequest(t, NewRequest(t, "GET", "/v2/token").AddBasicAuth(user), http.StatusOK)
+			var tr struct {
+				Token string `json:"token"`
+			}
+			DecodeJSON(t, resp, &tr)
+			return "Bearer " + tr.Token
+		}
+		content := []byte("damast")
+		digest := fmt.Sprintf("sha256:%x", sha256.Sum256(content))
+		MakeRequest(t, NewRequestWithBody(t, "POST", "/v2/user5/secret/blobs/uploads?digest="+digest, bytes.NewReader(content)).
+			AddTokenAuth(v2token("user5")), http.StatusCreated)
+
+		reader := v2token("user2")
+		for _, method := range []string{"HEAD", "GET"} {
+			MakeRequest(t, NewRequest(t, method, "/v2/user5/secret/blobs/"+digest).AddTokenAuth(reader), http.StatusNotFound)
+			MakeRequest(t, NewRequest(t, method, "/v2/user5/secret/manifests/latest").AddTokenAuth(reader), http.StatusNotFound)
+		}
+		// the owner still sees it
+		MakeRequest(t, NewRequest(t, "HEAD", "/v2/user5/secret/blobs/"+digest).AddTokenAuth(v2token("user5")), http.StatusOK)
 	})
 
 	t.Run("listing endpoints stay owner-level", func(t *testing.T) {

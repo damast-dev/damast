@@ -230,6 +230,11 @@ func GetPackageDescriptor(ctx context.Context, pv *PackageVersion) (*PackageDesc
 
 // GetPackageFileDescriptor gets a package file descriptor for a package file
 func GetPackageFileDescriptor(ctx context.Context, pf *PackageFile) (*PackageFileDescriptor, error) {
+	if DamastCheckReadFile != nil { // DAMAST: repo-bound packages
+		if err := DamastCheckReadFile(ctx, pf); err != nil {
+			return nil, err
+		}
+	}
 	pb, err := GetBlobByID(ctx, pf.BlobID)
 	if err != nil {
 		return nil, err

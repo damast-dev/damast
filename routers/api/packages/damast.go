@@ -49,16 +49,21 @@ func damastProvisionalAccess(ctx *context.Context) {
 	}
 }
 
-// damastDenyResponse turns the 500 that registry handlers send for unknown errors into a 403
-// when Damast rejected the request (handlers compare errors by equality, so they can't map it).
+// damastDenyResponse rewrites the status when Damast rejected the request (handlers compare errors by
+// equality and answer unknown ones with 500). Denied reads become 404, so a package the reader may not
+// see looks like one that does not exist. Denied uploads become 403: a taken name can't be hidden there.
 type damastDenyResponse struct {
 	context.ResponseWriter
 	grant *damast_packages.Grant
 }
 
 func (r *damastDenyResponse) WriteHeader(status int) {
-	if status == http.StatusInternalServerError && r.grant.Denied() {
-		status = http.StatusForbidden
+	if r.grant.Denied() && status >= http.StatusBadRequest {
+		if r.grant.Mode == perm.AccessModeRead {
+			status = http.StatusNotFound
+		} else if status == http.StatusInternalServerError {
+			status = http.StatusForbidden
+		}
 	}
 	r.ResponseWriter.WriteHeader(status)
 }
