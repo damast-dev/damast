@@ -30,3 +30,8 @@ func TestRepoNamesFromPackageName(t *testing.T) {
 	assert.Equal(t, []string{"foo"}, repoNamesFromPackageName("foo/bar"))
 	assert.Equal(t, []string{"foo"}, repoNamesFromPackageName("@scope/foo"))
 }
+
+func TestMavenArtifactCandidates(t *testing.T) {
+	assert.Equal(t, []string{"my-lib"}, mavenArtifactCandidates("com.acme:my-lib"))
+	assert.Empty(t, mavenArtifactCandidates("nocolon"))
+}

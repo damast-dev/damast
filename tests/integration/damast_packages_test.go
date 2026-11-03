@@ -51,7 +51,7 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 	})
 
 	t.Run("new package without a writable repo is rejected and rolled back", func(t *testing.T) {
-		put("user4", "unrelated", "1.0", http.StatusInternalServerError)
+		put("user4", "unrelated", "1.0", http.StatusForbidden)
 		assert.Nil(t, pkg("unrelated"))
 	})
 
@@ -66,7 +66,28 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 	t.Run("unlinked package of the owner stays owner-only", func(t *testing.T) {
 		put("user5", "legacy", "1.0", http.StatusCreated)
 		assert.Zero(t, pkg("legacy").RepoID)
-		put("user4", "legacy", "1.1", http.StatusInternalServerError)
+		put("user4", "legacy", "1.1", http.StatusForbidden)
+	})
+
+	t.Run("maven: artifact named like the repo, pom update of foreign version rejected", func(t *testing.T) {
+		mvn := func(user, artifact, file, body string, status int) {
+			t.Helper()
+			url := fmt.Sprintf("/api/packages/user5/maven/com/example/%s/1.0/%s", artifact, file)
+			MakeRequest(t, NewRequestWithBody(t, "PUT", url, bytes.NewReader([]byte(body))).AddBasicAuth(user), status)
+		}
+		pom := func(artifact string) string {
+			return `<?xml version="1.0"?><project><groupId>com.example</groupId><artifactId>` + artifact + `</artifactId><version>1.0</version></project>`
+		}
+
+		mvn("user4", "repo4", "repo4-1.0.jar", "jar", http.StatusCreated)
+		p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeMaven, "com.example:repo4")
+		require.NoError(t, err)
+		assert.EqualValues(t, 4, p.RepoID)
+		mvn("user4", "repo4", "repo4-1.0.pom", pom("repo4"), http.StatusCreated)
+
+		// owner publishes an unlinked artifact; the collaborator must not rewrite its metadata
+		mvn("user5", "internal", "internal-1.0.jar", "jar", http.StatusCreated)
+		mvn("user4", "internal", "internal-1.0.pom", pom("internal"), http.StatusForbidden)
 	})
 
 	t.Run("users without repo write get nothing", func(t *testing.T) {
@@ -85,6 +106,6 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 		inherit, err := damast.InheritsRepoAccess(ctx, pkg("repo4").ID)
 		require.NoError(t, err)
 		assert.False(t, inherit)
-		put("user4", "repo4", "3.0", http.StatusInternalServerError)
+		put("user4", "repo4", "3.0", http.StatusForbidden)
 	})
 }

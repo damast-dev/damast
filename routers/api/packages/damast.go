@@ -13,10 +13,6 @@ import (
 	damast_packages "forgejo.org/services/damast/packages"
 )
 
-// Registries whose upload handlers change existing package data before the central OnWrite check.
-// shortcut: no inherited write for these until their handlers are hooked too.
-var damastNoInheritTypes = map[string]bool{"maven": true, "conan": true}
-
 // Write routes that are not uploads; provisional access never applies to them.
 var damastNonUploadPaths = []string{"/unyank", "/yank", "/-rev/", "/dist-tags/", "/delete"}
 
@@ -36,7 +32,22 @@ func damastProvisionalWrite(ctx *context.Context) {
 	if g != nil {
 		ctx.Package.AccessMode = perm.AccessModeWrite
 		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
+		ctx.Resp = &damastDenyResponse{ResponseWriter: ctx.Resp, grant: g}
 	}
+}
+
+// damastDenyResponse turns the 500 that registry handlers send for unknown errors into a 403
+// when OnWrite rejected the request (handlers compare errors by equality, so they can't map it).
+type damastDenyResponse struct {
+	context.ResponseWriter
+	grant *damast_packages.Grant
+}
+
+func (r *damastDenyResponse) WriteHeader(status int) {
+	if status == http.StatusInternalServerError && r.grant.Denied() {
+		status = http.StatusForbidden
+	}
+	r.ResponseWriter.WriteHeader(status)
 }
 
 func damastIsUpload(req *http.Request) bool {
@@ -50,10 +61,6 @@ func damastIsUpload(req *http.Request) bool {
 		if strings.Contains(path, p) {
 			return false
 		}
-	}
-	// /api/packages/{owner}/{type}/...; container uses /v2/...
-	if parts := strings.Split(strings.TrimPrefix(path, "/api/packages/"), "/"); strings.HasPrefix(path, "/api/packages/") && len(parts) > 1 && damastNoInheritTypes[parts[1]] {
-		return false
 	}
 	return true
 }

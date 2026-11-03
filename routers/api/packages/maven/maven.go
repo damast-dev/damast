@@ -28,6 +28,7 @@ import (
 	"forgejo.org/modules/sync"
 	"forgejo.org/routers/api/packages/helper"
 	"forgejo.org/services/context"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	packages_service "forgejo.org/services/packages"
 )
 
@@ -350,6 +351,10 @@ func UploadPackageFile(ctx *context.Context) {
 				return
 			}
 			if pv != nil {
+				if err := damast_packages.OnWriteVersion(ctx, pv, ctx.Doer); err != nil { // DAMAST: repo-bound packages
+					apiError(ctx, http.StatusForbidden, err)
+					return
+				}
 				raw, err := json.Marshal(pvci.Metadata)
 				if err != nil {
 					apiError(ctx, http.StatusInternalServerError, err)

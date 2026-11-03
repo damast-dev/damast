@@ -39,6 +39,16 @@ var GrantKey = grantKey{}
 type Grant struct {
 	Doer *user_model.User
 	Task *actions_model.ActionTask // set when authenticated with an Actions token
+
+	denied bool
+}
+
+// Denied reports whether OnWrite rejected this request.
+func (g *Grant) Denied() bool { return g.denied }
+
+func (g *Grant) deny() error {
+	g.denied = true
+	return util.ErrPermissionDenied
 }
 
 // NewGrant returns a Grant if doer may write to at least one repository of owner, or nil.
@@ -103,18 +113,25 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 			return nil // owner-level access, Forgejo behaviour
 		}
 		if p.RepoID == 0 {
-			return util.ErrPermissionDenied
+			return g.deny()
 		}
 		inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
-		if err != nil || !inherit {
-			return errOr(err, util.ErrPermissionDenied)
+		if err != nil {
+			return err
+		}
+		if !inherit {
+			return g.deny()
 		}
 		repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
 		if err != nil {
 			return err
 		}
-		if ok, err := canWrite(ctx, g, doer, repo); err != nil || !ok {
-			return errOr(err, util.ErrPermissionDenied)
+		ok, err := canWrite(ctx, g, doer, repo)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return g.deny()
 		}
 		return nil
 	}
@@ -130,7 +147,7 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 	}
 	if repo == nil {
 		if g != nil {
-			return util.ErrPermissionDenied // provisional access needs a repository the doer may write to
+			return g.deny() // provisional access needs a repository the doer may write to
 		}
 		return damast.SetInheritRepoAccess(ctx, p.ID, true)
 	}
@@ -160,13 +177,6 @@ func OnWriteVersion(ctx context.Context, pv *packages_model.PackageVersion, doer
 	return OnWrite(ctx, p, false, doer, nil)
 }
 
-func errOr(err, fallback error) error {
-	if err != nil {
-		return err
-	}
-	return fallback
-}
-
 // targetRepo picks the repository a new package belongs to: the Actions run's repo, a repo URL from the
 // metadata, or a repo named like the package. Only repos of the package owner the doer may write to qualify.
 func targetRepo(ctx context.Context, p *packages_model.Package, g *Grant, doer *user_model.User, metadata any) (*repo_model.Repository, error) {
@@ -177,7 +187,11 @@ func targetRepo(ctx context.Context, p *packages_model.Package, g *Grant, doer *
 	for _, name := range repoNamesFromMetadata(ctx, metadata, p.OwnerID) {
 		candidates = append(candidates, byName(ctx, p.OwnerID, name))
 	}
-	for _, name := range repoNamesFromPackageName(p.LowerName) {
+	names := repoNamesFromPackageName(p.LowerName)
+	if p.Type == packages_model.TypeMaven {
+		names = append(names, mavenArtifactCandidates(p.LowerName)...)
+	}
+	for _, name := range names {
 		candidates = append(candidates, byName(ctx, p.OwnerID, name))
 	}
 
@@ -215,6 +229,14 @@ func repoNamesFromPackageName(name string) []string {
 		out = []string{parts[1]}
 	}
 	return out
+}
+
+// mavenArtifactCandidates: maven names packages "groupId:artifactId".
+func mavenArtifactCandidates(name string) []string {
+	if _, artifact, ok := strings.Cut(name, ":"); ok {
+		return []string{artifact}
+	}
+	return nil
 }
 
 // repoNamesFromMetadata finds URLs of this instance in any string field of the metadata
