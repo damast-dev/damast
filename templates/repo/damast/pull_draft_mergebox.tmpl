@@ -1,0 +1,16 @@
+{{/* DAMAST: merge box of a draft pull request, with a prominent "Ready for review" button.
+	The button removes the WIP prefix through the existing .toggle-wip handler (repo-issue.js).
+	shortcut: English only, move strings to locale_next when upstreaming. */}}
+<div class="item toggle-wip damast-draft-mergebox" data-title="{{.Issue.Title}}" data-wip-prefixes="{{JsonUtils.EncodeToString .PullRequestWorkInProgressPrefixes}}" data-update-url="{{.Issue.Link}}/title">
+	<div class="flex-text-inline tw-flex-1">
+		{{svg "octicon-git-pull-request-draft"}}
+		<div>
+			<strong>This pull request is still a draft.</strong>
+			<div class="text grey">{{ctx.Locale.Tr "repo.pulls.cannot_merge_work_in_progress"}}</div>
+			<div class="text grey">Marking it ready for review removes the <code>{{.WorkInProgressPrefix}}</code> title prefix and asks code owners for review.</div>
+		</div>
+	</div>
+	{{if or .HasIssuesOrPullsWritePermission .IsIssuePoster}}
+		<button class="ui primary compact button" data-test-name="damast-ready-for-review">Ready for review</button>
+	{{end}}
+</div>

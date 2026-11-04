@@ -1,0 +1,17 @@
+{{/* DAMAST: "Create pull request" split button with "Create draft pull request".
+	The draft button submits draft=true; the server adds the first WIP prefix to the title.
+	shortcut: English only, move strings to locale_next when upstreaming. */}}
+<div class="text right">
+	<div class="ui buttons damast-pull-create">
+		<button class="ui primary button" data-test-name="damast-create-pr">{{ctx.Locale.Tr "repo.pulls.create"}}</button>
+		<div class="ui primary jump dropdown icon button" aria-label="More create options" data-test-name="damast-create-pr-menu">
+			{{svg "octicon-triangle-down" 14}}
+			<div class="menu">
+				<button class="item" name="draft" value="true" data-test-name="damast-create-draft-pr">
+					<div><strong>Create draft pull request</strong></div>
+					<div class="text grey">Cannot be merged until marked ready for review. Code owners are asked for review then.</div>
+				</button>
+			</div>
+		</div>
+	</div>
+</div>

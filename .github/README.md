@@ -48,6 +48,20 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
 
+### Draft pull requests
+
+**On Forgejo:** a pull request is a draft when its title starts with `WIP:`. You type the prefix by hand, the prefix shows up in every list, and the only way to mark a pull request ready is to edit its title.
+
+**On Damast:** drafts work like on GitHub.
+
+- **Create pull request ▾** has a second option, **Create draft pull request**.
+- Drafts show a **Draft** badge in pull request lists, on the dashboard, in notifications and on project boards, and their title without the prefix.
+- The merge box of a draft has a **Ready for review** button. The sidebar has **Convert to draft**.
+- Code owners are asked for review when a draft becomes ready, not while you're still working on it. You can still request reviews by hand at any time.
+- The API takes `"draft": true` when you create a pull request, and [`mast`](https://github.com/damast-dev/mast) has `mast pr create --draft`, `mast pr ready` and `mast pr draft`.
+
+Under the hood a draft is still a `WIP:` title (the first entry of `[repository.pull-request] WORK_IN_PROGRESS_PREFIXES`), so Forgejo sees exactly the same drafts.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -93,6 +107,7 @@ What you lose:
 | Feature | After going back |
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
+| Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
@@ -117,6 +132,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 **Shipped**
 - Co-authors on commit pages and in commit lists
 - Repo-bound packages: publish, download, Actions token, per-package switch
+- Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Damast's own name and logo
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 

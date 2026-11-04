@@ -24,6 +24,7 @@ import (
 	"forgejo.org/models/unit"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/base"
+	damast_draft "forgejo.org/modules/damast/draft" // DAMAST:
 	"forgejo.org/modules/git"
 	"forgejo.org/modules/gitrepo"
 	"forgejo.org/modules/log"
@@ -517,6 +518,10 @@ func CreatePullRequest(ctx *context.APIContext) {
 	var deadlineUnix timeutil.TimeStamp
 	if form.Deadline != nil {
 		deadlineUnix = timeutil.TimeStamp(form.Deadline.Unix())
+	}
+
+	if form.Draft { // DAMAST: GitHub-compatible draft flag
+		form.Title = damast_draft.Mark(form.Title)
 	}
 
 	prIssue := &issues_model.Issue{
