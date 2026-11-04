@@ -6,5 +6,12 @@
 	},
 	"damast.packages.repo_access": "Repository access",
 	"damast.packages.inherit": "Inherit access from the linked repository",
-	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions."
+	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.",
+	"damast.drafts.create": "Create draft pull request",
+	"damast.drafts.create_help": "Cannot be merged until marked ready for review. Code owners are asked for review then.",
+	"damast.drafts.more_options": "More ways to create",
+	"damast.drafts.still_draft": "This pull request is still a draft.",
+	"damast.drafts.ready_help": "Marking it ready for review removes the <code>%s</code> title prefix and asks code owners for review.",
+	"damast.drafts.ready": "Ready for review",
+	"damast.drafts.convert": "Convert to draft"
 }
