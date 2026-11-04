@@ -1,0 +1,134 @@
+# Builds and publishes a release for every Damast tag (vX.Y.Z-damast.N, RCs: vX.Y.Z-damast.N-rc.M).
+# Tags come from tag-rc.yml and promote.yml; they push with SYNC_TOKEN so this workflow runs.
+name: release
+
+on:
+  push:
+    tags: ['v*-damast.*']
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/damast-dev/damast
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      tags: ${{ steps.v.outputs.tags }}
+      rootless_tags: ${{ steps.v.outputs.rootless_tags }}
+    steps:
+      - id: v
+        run: |
+          tag=${GITHUB_REF_NAME}
+          [[ $tag =~ ^v(([0-9]+)\.([0-9]+)\.[0-9]+)-damast\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::not a Damast tag: $tag"; exit 1; }
+          version=${tag#v}; forgejo=${BASH_REMATCH[1]}; major=${BASH_REMATCH[2]}; minor=$major.${BASH_REMATCH[3]}
+          if [[ -n ${BASH_REMATCH[4]} ]]; then
+            prerelease=true; list=("$version")                       # RCs only get their exact tag
+          else
+            prerelease=false; list=("$version" "$forgejo" "$minor" "$major" latest)
+          fi
+          tags=""; rootless=""
+          for t in "${list[@]}"; do
+            tags+="$IMAGE:$t,"
+            [[ $t == latest ]] && rootless+="$IMAGE:rootless," || rootless+="$IMAGE:$t-rootless,"
+          done
+          { echo "version=$version"; echo "prerelease=$prerelease"; echo "tags=${tags%,}"; echo "rootless_tags=${rootless%,}"; } >> "$GITHUB_OUTPUT"
+
+  binaries:
+    needs: meta
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe sets the version
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build
+        run: TAGS="bindata timetzdata sqlite sqlite_unlock_notify" make build
+      - name: Check version
+        run: ./gitea --version | tee /dev/stderr | grep -qF "${{ needs.meta.outputs.version }}"
+      - name: Package
+        run: |
+          mkdir dist
+          name=damast-${{ needs.meta.outputs.version }}-linux-${{ matrix.arch }}
+          cp gitea "dist/$name" && xz -k -9 "dist/$name"
+          (cd dist && sha256sum "$name" "$name.xz" > "$name.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.arch }}
+          path: dist/*
+
+  docker:
+    needs: meta
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { file: Dockerfile, tags: tags }
+          - { file: Dockerfile.rootless, tags: rootless_tags }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.meta.outputs[matrix.tags] }}
+          build-args: RELEASE_VERSION=${{ needs.meta.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=Damast
+            org.opencontainers.image.description=Every commit a layer. A soft fork of Forgejo.
+            org.opencontainers.image.source=https://github.com/damast-dev/damast
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
+      - name: Check version
+        run: |
+          tag=$(echo "${{ needs.meta.outputs[matrix.tags] }}" | cut -d, -f1)
+          docker run --rm --entrypoint gitea "$tag" --version | tee /dev/stderr | grep -qF "${{ needs.meta.outputs.version }}"
+
+  release:
+    needs: [meta, binaries, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${{ needs.meta.outputs.version }}
+          flags=(--generate-notes --verify-tag --title "Damast $v")
+          if [[ ${{ needs.meta.outputs.prerelease }} == true ]]; then flags+=(--prerelease); else flags+=(--latest); fi
+          cat > notes.md <<NOTES
+          Built on Forgejo ${v%%-damast*}. Drop-in both ways: run it on your Forgejo ${v%%-damast*} data, and go back to Forgejo ${v%%-damast*} any time.
+
+          Docker: \`ghcr.io/damast-dev/damast:$v\` and \`ghcr.io/damast-dev/damast:$v-rootless\`
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" --notes-file notes.md dist/*
