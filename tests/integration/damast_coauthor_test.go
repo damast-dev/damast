@@ -39,12 +39,34 @@ func TestDamastCoAuthors(t *testing.T) {
 		assert.Equal(t, 2, row.Find(".damast-coauthor").Length())
 		href, _ := row.Find("a.damast-coauthor").Attr("href")
 		assert.Equal(t, "/user1", href)
+		// GitHub-style stack: author avatar first, then the co-authors; names collapse to "N others"
+		assert.Equal(t, 1, row.Find(".damast-avatar-stack .damast-author").Length())
+		assert.Contains(t, row.Find(".damast-author-names").Text(), "2 others")
 
 		// commit view: names are shown
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/"+sha), http.StatusOK).Body)
 		authors := doc.doc.Find(".commit-header-row .author .damast-coauthor")
 		assert.Equal(t, 2, authors.Length())
-		assert.Contains(t, authors.Text(), "Stranger")
+		names := doc.doc.Find(".commit-header-row .author .damast-author-names").Text()
+		assert.Contains(t, names, "User One")
+		assert.Contains(t, names, "Stranger")
+		assert.Contains(t, names, " and ")
+
+		// more than four co-authors: four avatars plus a "+N" counter
+		var many strings.Builder
+		many.WriteString("mob session\n\n")
+		for _, n := range []string{"a", "b", "c", "d", "e", "f"} {
+			many.WriteString("Co-authored-by: Mob " + n + " <mob-" + n + "@example.org>\n")
+		}
+		resp, err = files_service.ChangeRepoFiles(git.DefaultContext, repo1, user2, &files_service.ChangeRepoFilesOptions{
+			Files:     []*files_service.ChangeRepoFile{{Operation: "create", TreePath: "damast-mob.txt", ContentReader: strings.NewReader("x")}},
+			OldBranch: "master",
+			Message:   many.String(),
+		})
+		require.NoError(t, err)
+		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/"+resp.Commit.SHA), http.StatusOK).Body)
+		assert.Equal(t, 4, doc.doc.Find(".commit-header-row .damast-coauthor").Length())
+		assert.Equal(t, "+2", strings.TrimSpace(doc.doc.Find(".commit-header-row .damast-coauthor-more").Text()))
 
 		// commits without trailer render no co-authors
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/65f1bf27bc3bf70f64657658635e66094edbcb4d"), http.StatusOK).Body)

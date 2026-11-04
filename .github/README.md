@@ -34,7 +34,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Forgejo:** `Co-authored-by:` trailers show up as plain text at the bottom of the commit message. Pair programming, mob sessions and suggested changes all end up credited to one person.
 
-**On Damast:** every co-author appears next to the author, with avatar and a link to their profile, on the commit page and in every commit list. Co-authors without an account still show, with the avatar for their email. There is nothing to configure: write the trailer, Damast does the rest.
+**On Damast:** author and co-authors appear together as one overlapping avatar stack, like on GitHub, followed by their names ("Jonas Berg and 2 others" in lists, every name on the commit page). Each avatar links to the profile, on the commit page, in every commit list and in pull request timelines. Co-authors without an account still show, with the avatar for their email. There is nothing to configure: write the trailer, Damast does the rest.
 
 ### Packages belong to their repository
 
