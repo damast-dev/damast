@@ -49,6 +49,9 @@ func (g *Grant) Denied() bool { return g.denied }
 
 func (g *Grant) deny() error {
 	g.denied = true
+	if g.Mode == perm.AccessModeRead {
+		return packages_model.ErrPackageNotExist // handlers answer it exactly like a missing package
+	}
 	return util.ErrPermissionDenied
 }
 
@@ -72,6 +75,9 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 		}
 		return &Grant{Mode: mode, Doer: doer, Task: task}, nil
 	}
+	if !doer.IsAccessAllowed(ctx) {
+		return nil, nil // prohibited, inactive or missing required 2FA: Forgejo grants no package access either
+	}
 	has, err := db.GetEngine(ctx).Table("access").
 		Join("INNER", "repository", "repository.id = access.repo_id").
 		Where("access.user_id = ? AND repository.owner_id = ? AND access.mode >= ?", doer.ID, owner.ID, mode).
@@ -94,19 +100,12 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 	if g == nil || g.Mode != perm.AccessModeRead {
 		return nil
 	}
-	if p.RepoID == 0 {
-		return g.deny()
-	}
-	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+	repo, err := inheritedRepo(ctx, p)
 	if err != nil {
 		return err
 	}
-	if !inherit {
+	if repo == nil {
 		return g.deny()
-	}
-	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
-	if err != nil {
-		return err
 	}
 	var rp access_model.Permission
 	if g.Task != nil {
@@ -138,6 +137,29 @@ func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 		return err
 	}
 	return CheckRead(ctx, p)
+}
+
+// inheritedRepo returns the repository whose permissions apply to p, or nil when p is not linked, doesn't
+// inherit, or is linked to a repository of another owner (npm links to any writable repo, transfers keep links).
+func inheritedRepo(ctx context.Context, p *packages_model.Package) (*repo_model.Repository, error) {
+	if p.RepoID == 0 {
+		return nil, nil
+	}
+	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+	if err != nil || !inherit {
+		return nil, err
+	}
+	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
+	if repo_model.IsErrRepoNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if repo.OwnerID != p.OwnerID {
+		return nil, nil
+	}
+	return repo, nil
 }
 
 func grantFrom(ctx context.Context) *Grant {
@@ -174,19 +196,12 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 		if g == nil {
 			return nil // owner-level access, Forgejo behaviour
 		}
-		if p.RepoID == 0 {
-			return g.deny()
-		}
-		inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+		repo, err := inheritedRepo(ctx, p)
 		if err != nil {
 			return err
 		}
-		if !inherit {
+		if repo == nil {
 			return g.deny()
-		}
-		repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
-		if err != nil {
-			return err
 		}
 		ok, err := canWrite(ctx, g, doer, repo)
 		if err != nil {
