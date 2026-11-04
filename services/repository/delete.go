@@ -15,6 +15,7 @@ import (
 	admin_model "forgejo.org/models/admin"
 	asymkey_model "forgejo.org/models/asymkey"
 	auth_model "forgejo.org/models/auth"
+	"forgejo.org/models/damast" // DAMAST:
 	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
@@ -213,6 +214,9 @@ func DeleteRepositoryDirectly(ctx context.Context, repoID int64, opts DeleteRepo
 			&auth_model.AccessTokenResourceRepo{RepoID: repoID},
 		); err != nil {
 			return fmt.Errorf("deleteBeans: %w", err)
+		}
+		if err := damast.DeleteRepoSecurityData(ctx, repoID); err != nil { // DAMAST: security advisories
+			return err
 		}
 
 		if !opts.KeepMigrationBeans {
