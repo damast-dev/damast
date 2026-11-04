@@ -19,6 +19,14 @@ Docs, designs and tasks live in Jira project **MAST** (jinc.atlassian.net), not 
    `Co-authored-by: Claude <noreply@anthropic.com>`.
 5. Existing tests stay green; new features come with tests.
 
+## UI strings
+
+Damast's own strings live in `options/locale_damast/locale_<lang>.json` (same format as `options/locale_next`),
+keys start with `damast.`, templates use `ctx.Locale.Tr "damast.…"`. Never add keys to Forgejo's locale files.
+`en-US` is the source; `de-DE` is kept complete by us; other languages are added per release for all of
+Forgejo's languages. A missing translation shows English. `modules/translation/damast_test.go` checks keys
+and placeholders.
+
 ## Upstream sync
 
 `main` = a Forgejo release tag + Damast commits. New releases arrive as `sync/vX.Y.Z` PRs
