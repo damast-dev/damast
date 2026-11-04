@@ -43,7 +43,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 **On Damast:** a package belongs to the repository it was built from, like on GitHub.
 
 - New packages link to their repository by themselves: from the Actions run that published them, from the repository URL in their metadata, or from their name.
-- Write access to the repository lets you publish. Read access lets you download, even from a private organization.
+- Write access to the repository lets you publish. Read access lets you download from container, generic, Maven, npm and PyPI registries, even in a private organization. Registries with one index per owner (Debian, RPM, Cargo, ...) keep Forgejo's read rules, so their indexes can't leak other packages.
 - Workflows publish with their built-in token. Pull requests from forks can only read.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
