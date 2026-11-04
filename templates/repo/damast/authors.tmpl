@@ -10,7 +10,7 @@ Mode ("header": all names linked | "list": "A and B" / "A and N others" | "small
 			{{if $c.User}}<a class="damast-coauthor" href="{{$c.User.HomeLink}}" data-tooltip-content="{{$c.User.GetDisplayName}}">{{ctx.AvatarUtils.Avatar $c.User $size}}</a>
 			{{else}}<span class="damast-coauthor" data-tooltip-content="{{$c.Name}} &lt;{{$c.Email}}&gt;">{{ctx.AvatarUtils.AvatarByEmail $c.Email $c.Name $size}}</span>{{end}}
 		{{end}}{{end}}
-		{{if gt $n 4}}<span class="damast-coauthor-more text small" data-tooltip-content="{{range $i, $c := $co}}{{if ge $i 4}}{{$c.Name}} {{end}}{{end}}">+{{Eval $n "-" 4}}</span>{{end}}
+		{{if gt $n 4}}<span class="damast-coauthor-more text small" data-tooltip-content="{{range $i, $c := $co}}{{if gt $i 4}}, {{end}}{{if ge $i 4}}{{$c.Name}}{{end}}{{end}}">+{{Eval $n "-" 4}}</span>{{end}}
 	</span>
 	{{if ne $mode "small"}}
 	<span class="damast-author-names">

@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"bytes"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/git"
+	"forgejo.org/modules/test"
 	files_service "forgejo.org/services/repository/files"
 
 	"github.com/stretchr/testify/assert"
@@ -67,6 +69,39 @@ func TestDamastCoAuthors(t *testing.T) {
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/"+resp.Commit.SHA), http.StatusOK).Body)
 		assert.Equal(t, 4, doc.doc.Find(".commit-header-row .damast-coauthor").Length())
 		assert.Equal(t, "+2", strings.TrimSpace(doc.doc.Find(".commit-header-row .damast-coauthor-more").Text()))
+
+		// "+N" tooltip separates the hidden names
+		tip, _ := doc.doc.Find(".commit-header-row .damast-coauthor-more").Attr("data-tooltip-content")
+		assert.Equal(t, "Mob e, Mob f", tip)
+
+		// hostile and odd trailers, on a PR branch so the PR commits tab is covered too
+		resp, err = files_service.ChangeRepoFiles(git.DefaultContext, repo1, user2, &files_service.ChangeRepoFilesOptions{
+			Files:     []*files_service.ChangeRepoFile{{Operation: "create", TreePath: "damast-edge.txt", ContentReader: strings.NewReader("x")}},
+			OldBranch: "master",
+			NewBranch: "damast-coauthor-edge",
+			Message: "edge\n\n" +
+				"Co-authored-by: <img src=x onerror=alert(1)> \"q <xss@example.org>\n" +
+				"Co-authored-by: User One <user1@example.com>\n" +
+				"Co-authored-by: User One Again <user1-2@example.com>\n" + // same account, other email: shown once
+				"Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n" +
+				"Co-authored-by: Not Verified <user2-2@example.com>\n", // unverified email of user2: no link
+		})
+		require.NoError(t, err)
+		for _, link := range []string{"/user2/repo1/commit/" + resp.Commit.SHA, ""} {
+			if link == "" {
+				pr := testPullCreate(t, session, "user2", "repo1", true, "master", "damast-coauthor-edge", "co-author edge")
+				link = test.RedirectURL(pr) + "/commits"
+			}
+			body := session.MakeRequest(t, NewRequest(t, "GET", link), http.StatusOK).Body.String()
+			assert.NotContains(t, body, "<img src=x onerror", link)
+			doc = NewHTMLParser(t, bytes.NewBufferString(body))
+			stack := doc.doc.Find(".damast-avatar-stack").First()
+			assert.Equal(t, 4, stack.Find(".damast-coauthor").Length(), link)
+			assert.Equal(t, 1, stack.Find("a.damast-coauthor").Length(), link)
+			assert.Equal(t, 1, stack.Find(`a.damast-coauthor[href="/user1"]`).Length(), link)
+			tip, _ := stack.Find("span.damast-coauthor").First().Attr("data-tooltip-content")
+			assert.Equal(t, `<img src=x onerror=alert(1)> "q <xss@example.org>`, tip, link)
+		}
 
 		// commits without trailer render no co-authors
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/65f1bf27bc3bf70f64657658635e66094edbcb4d"), http.StatusOK).Body)

@@ -5,7 +5,6 @@
 package coauthor
 
 import (
-	"net/mail"
 	"strings"
 )
 
@@ -34,20 +33,28 @@ func Parse(message, authorEmail string) []Identity {
 		if len(line) <= len(trailerKey) || !strings.EqualFold(line[:len(trailerKey)], trailerKey) {
 			continue
 		}
-		addr, err := mail.ParseAddress(strings.TrimSpace(line[len(trailerKey):]))
-		if err != nil {
+		// Split like git's ident parser ("Name <email>"), not RFC 5322: names like
+		// "dependabot[bot]" or "Doe, John" are valid in git but rejected by net/mail.
+		v := strings.TrimSpace(line[len(trailerKey):])
+		lt := strings.LastIndex(v, "<")
+		if lt < 0 || !strings.HasSuffix(v, ">") {
 			continue
 		}
-		key := strings.ToLower(addr.Address)
+		email := strings.TrimSpace(v[lt+1 : len(v)-1])
+		at := strings.Index(email, "@")
+		if at <= 0 || at != strings.LastIndex(email, "@") || at == len(email)-1 || strings.ContainsAny(email, "<> \t") {
+			continue
+		}
+		key := strings.ToLower(email)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		name := addr.Name
+		name := strings.Trim(strings.TrimSpace(v[:lt]), `"`)
 		if name == "" {
-			name = addr.Address
+			name = email
 		}
-		out = append(out, Identity{Name: name, Email: addr.Address})
+		out = append(out, Identity{Name: name, Email: email})
 	}
 	return out
 }

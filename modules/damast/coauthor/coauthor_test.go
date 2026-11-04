@@ -29,6 +29,13 @@ func TestParse(t *testing.T) {
 			[]Identity{{"Bob", "bob@x.org"}},
 		},
 		{"broken lines skipped", "feat\n\nCo-authored-by: no email\nCo-authored-by:\nCo-authored-by: <only@x.org>", "", []Identity{{"only@x.org", "only@x.org"}}},
+		{
+			"git-valid names that RFC 5322 rejects",
+			"feat\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\nCo-authored-by: Doe, John <j@x.org>\nCo-authored-by: \"Quoted\" <q@x.org>",
+			"",
+			[]Identity{{"dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.com"}, {"Doe, John", "j@x.org"}, {"Quoted", "q@x.org"}},
+		},
+		{"invalid emails skipped", "feat\n\nCo-authored-by: A <a>\nCo-authored-by: B <@x.org>\nCo-authored-by: C <c@>\nCo-authored-by: D <d@x@y>\nCo-authored-by: E <e@x.org> trailing", "", nil},
 		{"not in last paragraph", "feat\n\nCo-authored-by: Bob <bob@x.org>\n\nmore text", "", nil},
 	}
 	for _, c := range cases {
