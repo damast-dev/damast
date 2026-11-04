@@ -23,4 +23,17 @@ Docs, designs and tasks live in Jira project **MAST** (jinc.atlassian.net), not 
 
 `main` = a Forgejo release tag + Damast commits. New releases arrive as `sync/vX.Y.Z` PRs
 (`.github/workflows/upstream-sync.yml`). Merge them with a **merge commit**; never squash or rebase them.
-Releases are tagged `vX.Y.Z-damast.N`.
+
+## Releases
+
+Tags: `v<forgejo>-damast.N` (final) and `v<forgejo>-damast.N-rc.M` (release candidate). `N` counts Damast
+releases on one Forgejo version and restarts at 1; the Forgejo version stays in front because the binary
+reports it to the database (`forgejo_sem_ver`) and the API. Logic and self-test: `.github/scripts/version.sh`.
+
+- `tag-rc.yml` tags the next RC when a sync PR is merged, or by hand after Damast features land.
+- `promote.yml` tags the final release on the RC's commit. Never tag by hand.
+- `release.yml` builds linux amd64/arm64 binaries and `ghcr.io/damast-dev/damast` images per tag. RCs only
+  get their exact image tag; finals also move `X.Y.Z`, `X.Y`, `X` and `latest`.
+
+Every PR gets one label for the release notes: `feature`, `fix`, `security`, `branding`, `ci`,
+`upstream-sync` or `skip-changelog`.

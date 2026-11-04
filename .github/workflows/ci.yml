@@ -13,8 +13,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # shortcut: build + vet only; add `make test-backend` once damast patches exist.
+      # shortcut: full upstream suites run in Forgejo's CI; here only the build plus Damast's own tests.
       - run: go build ./...
+      - name: Release version logic
+        run: .github/scripts/version.sh self-test
       - name: No new upstream migrations from us
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'sync/')
         run: |
@@ -22,3 +24,16 @@ jobs:
           if git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -E '^models/(forgejo_)?migrations/'; then
             echo "::error::Damast must not touch Forgejo's migration chain (breaks drop-in / back-to-Forgejo). Use damast_* tables."; exit 1
           fi
+
+  damast-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update -q && sudo apt-get install -yq git-lfs && git lfs install --skip-repo
+      - name: Unit tests
+        run: go test -tags 'sqlite sqlite_unlock_notify' ./modules/damast/... ./models/damast/... ./services/damast/... ./modules/templates/...
+      - name: Integration tests (sqlite)
+        run: make 'test-sqlite#TestDamast'
