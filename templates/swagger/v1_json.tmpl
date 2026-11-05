@@ -26141,7 +26141,7 @@
           "x-go-name": "CommentIDs"
         },
         "content_versions": {
-          "description": "ContentVersions maps comment IDs to the content_version the client has shown; edited comments are refused.",
+          "description": "ContentVersions maps every comment ID to the content_version the client has shown (required); edited comments are refused.",
           "type": "object",
           "additionalProperties": {
             "type": "integer",
@@ -26218,7 +26218,7 @@
           "x-go-name": "Path"
         },
         "problem": {
-          "description": "Problem is why it can't be applied: \"multiple\", \"old_side\" or \"outdated\"; empty otherwise.",
+          "description": "Problem is why it can't be applied: \"multiple\", \"old_side\", \"outdated\" or \"too_large\"; empty otherwise.",
           "type": "string",
           "x-go-name": "Problem"
         },
