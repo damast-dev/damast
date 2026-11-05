@@ -4,6 +4,7 @@
 package stack
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -234,8 +235,15 @@ func MergeUpTo(ctx context.Context, s *Stack, target *Layer, doer *user_model.Us
 		if err != nil {
 			return merged, &LayerError{PR: pr, Err: err}
 		}
+		perm, err := access_model.GetUserRepoPermission(ctx, pr.BaseRepo, doer)
+		if err != nil {
+			return merged, err
+		}
 		if pr.BaseBranch != s.Trunk {
-			// the merge notifier normally did this already
+			// the merge notifier normally did this already; only someone who may merge may retarget
+			if ok, err := pull_service.IsUserAllowedToMerge(ctx, pr, perm, doer); err != nil || !ok {
+				return merged, &LayerError{PR: pr, Err: cmp.Or(err, error(pull_service.ErrUserNotAllowedToMerge))}
+			}
 			if err := pull_service.ChangeTargetBranch(ctx, pr, doer, s.Trunk); err != nil {
 				return merged, &LayerError{PR: pr, Err: err}
 			}
@@ -245,10 +253,6 @@ func MergeUpTo(ctx context.Context, s *Stack, target *Layer, doer *user_model.Us
 			if pr, want, err = reload(ctx, l, heads, s.Trunk); err != nil {
 				return merged, &LayerError{PR: pr, Err: err}
 			}
-		}
-		perm, err := access_model.GetUserRepoPermission(ctx, pr.BaseRepo, doer)
-		if err != nil {
-			return merged, err
 		}
 		if err := pull_service.CheckPullMergeable(ctx, doer, &perm, pr, pull_service.MergeCheckTypeGeneral, false, style); err != nil {
 			return merged, &LayerError{PR: pr, Err: err}
