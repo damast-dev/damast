@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	auth_model "forgejo.org/models/auth"
+	damast_model "forgejo.org/models/damast"
 	"forgejo.org/models/perm"
 	quota_model "forgejo.org/models/quota"
 	repo_model "forgejo.org/models/repo"
@@ -228,6 +229,7 @@ func webAuth(authMethod auth_service.Method) func(*context.Context) {
 		}
 		ctx.Doer = ar.User()
 		ctx.IsSigned = ar.User() != nil
+		damast_model.ApplyTheme(ctx, ctx.Doer) // DAMAST: green for accounts on Forgejo's default theme
 		ctx.Authentication = ar
 		if ctx.Doer == nil && ctx.InteractiveReauthenticationPossible {
 			// The request is not authenticated, and session authentication was attempted. Clear "uid" from the session.

@@ -15,6 +15,7 @@ import (
 	activities_model "forgejo.org/models/activities"
 	asymkey_model "forgejo.org/models/asymkey"
 	auth_model "forgejo.org/models/auth"
+	damast_model "forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
@@ -118,6 +119,7 @@ func deleteUser(ctx context.Context, u *user_model.User, purge bool) (err error)
 		&organization.TeamInvite{InvitedID: optional.Some(u.ID)},
 		&issues_model.Stopwatch{UserID: u.ID},
 		&user_model.Setting{UserID: u.ID},
+		&damast_model.UserThemeChoice{UserID: u.ID}, // DAMAST: theme choice
 		&user_model.UserBadge{UserID: u.ID},
 		&pull_model.AutoMerge{DoerID: u.ID},
 		&pull_model.ReviewState{UserID: u.ID},

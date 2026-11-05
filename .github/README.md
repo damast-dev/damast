@@ -54,7 +54,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Damast:** the default theme is `damast-auto`: Forgejo's theme with a green accent from GitHub's palette, so "Create merge commit", links and the active tab look the way GitHub users expect. It follows your system's light or dark mode; `damast-light` and `damast-dark` are there too. Text on buttons and links meets WCAG AA contrast in both modes.
 
-- Accounts that already have a theme keep it. Forgejo saves the theme with every new account, so most accounts from before the switch stay on `forgejo-auto`; pick Damast in **Settings → Appearance**.
+- Everyone gets green, including accounts from before the switch: Forgejo saves `forgejo-auto` with every account, and Damast shows that as `damast-auto`. Picking `forgejo-auto` again in **Settings → Appearance** brings orange back for good (Damast remembers that choice in its own table). Any other theme you picked, like `forgejo-dark`, stays as it is.
 - All of Forgejo's themes stay available. Green and red are hard to tell apart with red-green colour blindness: pick `forgejo-auto-deuteranopia-protanopia` there.
 - If your `app.ini` lists its own `[ui] THEMES` without the Damast themes and sets no `DEFAULT_THEME`, nothing changes: the default stays `forgejo-auto`. To make green the default for everyone, set `DEFAULT_THEME = damast-auto` and add `damast-auto,damast-light,damast-dark` to `THEMES`.
 
@@ -104,7 +104,7 @@ What you lose:
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
-| Green theme | Accounts on a `damast-*` theme fall back to Forgejo's default theme. If you set `damast-*` in `[ui] DEFAULT_THEME` or `THEMES` in `app.ini`, remove it first: Forgejo has no such stylesheet and would show pages unstyled. |
+| Green theme | Everyone sees the theme stored in their account again: `forgejo-auto` for accounts from before Damast, Forgejo's default theme for accounts on a `damast-*` theme. Damast only changes the stored theme when someone picks one. If you set `damast-*` in `[ui] DEFAULT_THEME` or `THEMES` in `app.ini`, remove it first: Forgejo has no such stylesheet and would show pages unstyled. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
 
