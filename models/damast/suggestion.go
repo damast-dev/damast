@@ -6,6 +6,7 @@ package damast
 import (
 	"context"
 	"io"
+	"strings"
 
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
@@ -106,6 +107,12 @@ func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, 
 	if err := c.Issue.LoadRepo(ctx); err != nil {
 		return nil, err
 	}
+	if s.Old = patchLines(c); s.Old != nil {
+		if c.Invalidated {
+			s.Problem = "damast.suggestions.outdated"
+		}
+		return s, nil
+	}
 	gitRepo, closer, err := gitrepo.RepositoryFromContextOrOpen(ctx, c.Issue.Repo)
 	if err != nil {
 		return nil, err
@@ -119,4 +126,30 @@ func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, 
 		s.Problem = "damast.suggestions.outdated"
 	}
 	return s, nil
+}
+
+// patchLines returns the commented lines as the reviewer saw them, from the
+// diff hunk stored with the comment (it ends at the comment's last line), or
+// nil if the hunk doesn't hold the whole range. Reading them at CommitSHA is
+// wrong for ranges: CommitSHA is the commit that last changed the first line,
+// and later lines of the range may have changed after it.
+func patchLines(c *issues_model.Comment) []string {
+	right := git.PatchRightSideContent(c.Patch)
+	last := int64(0)
+	for n := range right {
+		last = max(last, n)
+	}
+	count := c.ExtraLinesCount + 1
+	if last-count+1 < 1 {
+		return nil
+	}
+	lines := make([]string, 0, count)
+	for n := last - count + 1; n <= last; n++ {
+		l, ok := right[n]
+		if !ok {
+			return nil
+		}
+		lines = append(lines, strings.TrimSuffix(l, "\r"))
+	}
+	return lines
 }

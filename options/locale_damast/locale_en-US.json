@@ -23,5 +23,6 @@
 	"damast.suggestions.err_closed": "This pull request is closed.",
 	"damast.suggestions.err_invalid": "This comment has no suggestion that can be applied.",
 	"damast.suggestions.err_outdated": "The code changed since this suggestion was made, so it can't be applied anymore.",
-	"damast.suggestions.err_overlap": "Some suggestions in this batch change the same lines. Commit them one at a time."
+	"damast.suggestions.err_overlap": "Some suggestions in this batch change the same lines. Commit them one at a time.",
+	"damast.suggestions.err_edited": "A suggestion was edited. Reload the page and try again."
 }

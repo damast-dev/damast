@@ -30,7 +30,24 @@ func DamastApplySuggestions(ctx *context.Context) {
 		}
 		ids = append(ids, id)
 	}
-	sha, err := suggestion_service.Apply(ctx, ctx.Doer, issue.PullRequest, ids, ctx.FormString("message"))
+	// content_versions, if sent, holds the content version of each comment in comment_ids as shown on the page
+	var versions map[int64]int
+	if vs := ctx.FormStrings("content_versions"); len(vs) > 0 {
+		if len(vs) != len(ids) {
+			ctx.JSONError(ctx.Tr("damast.suggestions.err_invalid"))
+			return
+		}
+		versions = make(map[int64]int, len(ids))
+		for i, s := range vs {
+			v, err := strconv.Atoi(s)
+			if err != nil {
+				ctx.JSONError(ctx.Tr("damast.suggestions.err_invalid"))
+				return
+			}
+			versions[ids[i]] = v
+		}
+	}
+	sha, err := suggestion_service.Apply(ctx, ctx.Doer, issue.PullRequest, ids, versions, ctx.FormString("message"))
 	if err != nil {
 		key, status := suggestion_service.ErrorKey(err)
 		if key == "" {
