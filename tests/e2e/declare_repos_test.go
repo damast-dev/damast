@@ -239,6 +239,7 @@ liberapay: example
 custom: "http://localhost:3003/"
 `},
 	}}, nil)
+	damastDeclareRepos(t) // DAMAST:
 	// add your repo declarations here
 }
 

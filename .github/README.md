@@ -48,6 +48,19 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
 
+### Stacked pull requests
+
+**On Forgejo:** a pull request can target another pull request's branch, but nothing connects them. You keep track of the order yourself, rebase every branch by hand after a review fix lower down, and merge one by one. Merge the bottom one without deleting its branch and the next one keeps pointing at a branch that's already in `main`.
+
+**On Damast:** split a big change into small pull requests that build on each other, like GitHub's stacked pull requests, and review each layer on its own.
+
+- **Stack map.** Every pull request in a stack shows the whole stack above its conversation, commits and files: each layer with title, number, draft state and checks, and where you are. When two pull requests build on the same layer, the map is a tree, not a line.
+- **Nothing to set up.** A pull request is a layer when its base branch is the head branch of another open pull request in the same repository. Damast reads the stack from the branches, so there is nothing to store and nothing left behind if you go back to Forgejo. Pull requests from forks are never layers.
+- **Merge the bottom, the rest follows.** When a layer is merged, the layers on top of it are retargeted to its base branch, with a note in their timeline, whether you delete the branch or keep it. Forgejo only does this when the branch is deleted. Damast follows the same switch (`[repository.pull-request] RETARGET_CHILDREN_ON_MERGE`, on by default) and leaves the default branch and protected branches alone, so merging `develop` into `main` doesn't move every pull request aimed at `develop`.
+- **Rebase stack.** One button rebases every layer onto the layer below it, and the bottom one onto its base branch. It is only there if you may update every layer by rebase (branch protection and the repository's rebase-update setting count). Each force-push only goes through if the branch is still where it was when you loaded the page, and the run stops at the first conflict and tells you which layer and commit.
+- **Merge up to here.** Merges every layer from the bottom up to the one you're looking at, one after another, each through the normal merge: reviews, required checks, protected branches, drafts and dependencies apply per layer. It stops at the first layer that can't be merged and says why; the layers above it stay open.
+- **API and CLI.** `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/stack`, plus `POST …/damast/stack/rebase` and `…/damast/stack/merge`. In [`mast`](https://github.com/damast-dev/mast): `mast pr stack`, `mast pr stack push`, `mast pr stack sync` and `mast pr stack merge`.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -94,6 +107,7 @@ What you lose:
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
+| Stacked pull requests | The pull requests and their base branches stay; nothing was stored. The stack map and the stack buttons are gone, and a merged layer's children are only retargeted again when you delete its branch. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
 
@@ -117,6 +131,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 **Shipped**
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
+- Stacked pull requests: stack map, retarget on merge, rebase stack, merge up to here, API and `mast pr stack`
 - Damast's own name and logo
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 

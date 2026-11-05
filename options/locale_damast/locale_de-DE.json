@@ -6,5 +6,23 @@
 	},
 	"damast.packages.repo_access": "Repository-Zugriff",
 	"damast.packages.inherit": "Zugriff vom verknüpften Repository übernehmen",
-	"damast.packages.inherit_help": "Personen und Actions-Workflows mit Lesezugriff auf das verknüpfte Repository können dieses Paket herunterladen; mit Schreibzugriff können sie neue Versionen veröffentlichen."
+	"damast.packages.inherit_help": "Personen und Actions-Workflows mit Lesezugriff auf das verknüpfte Repository können dieses Paket herunterladen; mit Schreibzugriff können sie neue Versionen veröffentlichen.",
+	"damast.stack.title": {
+		"one": "Stapel aus %d Pull-Request",
+		"other": "Stapel aus %d Pull-Requests"
+	},
+	"damast.stack.trunk": "Stamm-Branch",
+	"damast.stack.current": "dieser Pull-Request",
+	"damast.stack.checks": "Checks: %s",
+	"damast.stack.rebase": "Stapel rebasen",
+	"damast.stack.rebase_help": "Setzt jede Ebene per Rebase auf die Ebene darunter und die unterste Ebene auf %s. Hält beim ersten Konflikt an.",
+	"damast.stack.merge": "Bis hier mergen",
+	"damast.stack.merge_desc": "Mergt %[1]s nacheinander in %[2]s (%[3]s). Jede Ebene muss ihre eigenen Checks, Reviews und Branch-Schutzregeln erfüllen; der Lauf hält bei der ersten Ebene an, die nicht gemergt werden kann, und die Ebenen darüber bleiben offen.",
+	"damast.stack.rebased": "%s per Rebase aktualisiert.",
+	"damast.stack.merged": "%s gemergt.",
+	"damast.stack.nothing_to_do": "Der Stapel ist bereits aktuell.",
+	"damast.stack.stopped_at": "Angehalten bei #%d: %s",
+	"damast.stack.reason_rebase_conflict": "beim Rebase von Commit %s ist ein Konflikt aufgetreten. Setze diese Ebene lokal neu auf, pushe sie und rebase den Stapel dann erneut.",
+	"damast.stack.reason_moved": "der Pull-Request hat sich geändert, seit die Seite geladen wurde. Lade sie neu und versuche es noch einmal.",
+	"damast.stack.reason_internal": "ein interner Fehler ist aufgetreten. Details stehen im Server-Log."
 }

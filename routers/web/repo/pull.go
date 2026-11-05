@@ -405,6 +405,7 @@ func setMergeTarget(ctx *context.Context, pull *issues_model.PullRequest) {
 	ctx.Data["BaseTarget"] = pull.BaseBranch
 	ctx.Data["HeadBranchLink"] = pull.GetHeadBranchLink(ctx)
 	ctx.Data["BaseBranchLink"] = pull.GetBaseBranchLink(ctx)
+	damastStackData(ctx, pull) // DAMAST: stacked pull requests
 }
 
 // GetPullDiffStats get Pull Requests diff stats
