@@ -6,5 +6,23 @@
 	},
 	"damast.packages.repo_access": "Repository access",
 	"damast.packages.inherit": "Inherit access from the linked repository",
-	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions."
+	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.",
+	"damast.stack.title": {
+		"one": "Stack of %d pull request",
+		"other": "Stack of %d pull requests"
+	},
+	"damast.stack.trunk": "Trunk branch",
+	"damast.stack.current": "this pull request",
+	"damast.stack.checks": "Checks: %s",
+	"damast.stack.rebase": "Rebase stack",
+	"damast.stack.rebase_help": "Rebases every layer onto the layer below it, and the bottom layer onto %s. Stops at the first conflict.",
+	"damast.stack.merge": "Merge up to here",
+	"damast.stack.merge_desc": "Merges %[1]s into %[2]s one after another (%[3]s). Every layer has to pass its own checks, reviews and branch protection; the run stops at the first layer that cannot be merged, and the layers above it stay open.",
+	"damast.stack.rebased": "Rebased %s.",
+	"damast.stack.merged": "Merged %s.",
+	"damast.stack.nothing_to_do": "The stack is already up to date.",
+	"damast.stack.stopped_at": "Stopped at #%d: %s",
+	"damast.stack.reason_rebase_conflict": "rebasing commit %s caused a conflict. Rebase this layer locally, push it, then rebase the stack again.",
+	"damast.stack.reason_moved": "the pull request changed since the page was loaded. Reload and try again.",
+	"damast.stack.reason_internal": "an internal error occurred. The server log has the details."
 }

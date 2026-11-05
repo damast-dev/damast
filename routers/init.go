@@ -36,6 +36,7 @@ import (
 	auth_method "forgejo.org/services/auth/method"
 	"forgejo.org/services/auth/source/oauth2"
 	"forgejo.org/services/automerge"
+	damast_stack "forgejo.org/services/damast/stack" // DAMAST:
 	"forgejo.org/services/cron"
 	federation_service "forgejo.org/services/federation"
 	feed_service "forgejo.org/services/feed"
@@ -149,6 +150,7 @@ func InitWebInstalled(ctx context.Context) {
 	mustInit(webhook.Init)
 	mustInit(pull_service.Init)
 	mustInit(automerge.Init)
+	mustInit(damast_stack.Init) // DAMAST: stacked pull requests
 	mustInit(task.Init)
 	mustInit(migrations_allowlist.Init)
 	eventsource.GetManager().Init()

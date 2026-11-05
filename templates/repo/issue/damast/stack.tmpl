@@ -1,0 +1,50 @@
+{{/* DAMAST: stack map of stacked pull requests, data from routers/web/repo/damast_stack.go. Strings: options/locale_damast. */}}
+{{with .DamastStack}}
+{{$d := .}}
+<div class="ui segment damast-stack tw-mt-2" id="damast-stack">
+	<div class="tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-mb-2">
+		<strong class="tw-flex tw-items-center tw-gap-1">{{svg "octicon-stack"}} {{ctx.Locale.TrN (len .Stack.Layers) "damast.stack.title" "damast.stack.title" (len .Stack.Layers)}}</strong>
+		<span class="tw-flex-1"></span>
+		{{if .CanRebase}}
+		<form method="post" action="{{$.Issue.Link}}/damast/stack/rebase">
+			{{$.CsrfTokenHtml}}
+			<input type="hidden" name="heads" value="{{.Heads}}">
+			<button class="ui tiny basic button" id="damast-stack-rebase" data-tooltip-content="{{ctx.Locale.Tr "damast.stack.rebase_help" .Stack.Trunk}}">{{svg "octicon-sync" 14}} {{ctx.Locale.Tr "damast.stack.rebase"}}</button>
+		</form>
+		{{end}}
+		{{if .CanMerge}}
+		<form method="post" action="{{$.Issue.Link}}/damast/stack/merge" id="damast-stack-merge-form">
+			{{$.CsrfTokenHtml}}
+			<input type="hidden" name="heads" value="{{.Heads}}">
+			<input type="hidden" name="style" value="{{.MergeStyle}}">
+			<button type="button" class="ui tiny primary button delete-button" id="damast-stack-merge" data-type="form" data-form="#damast-stack-merge-form" data-modal-id="damast-stack-merge-modal">{{svg "octicon-git-merge" 14}} {{ctx.Locale.Tr "damast.stack.merge"}}</button>
+		</form>
+		<div class="ui g-modal-confirm modal" id="damast-stack-merge-modal">
+			<div class="header">{{svg "octicon-git-merge"}} {{ctx.Locale.Tr "damast.stack.merge"}}</div>
+			<div class="content"><p>{{ctx.Locale.Tr "damast.stack.merge_desc" .MergeList .Stack.Trunk .MergeStyle}}</p></div>
+			{{template "base/modal_actions_confirm" (dict "ModalButtonTypes" "confirm")}}
+		</div>
+		{{end}}
+	</div>
+	<ol class="damast-stack-layers tw-list-none tw-m-0 tw-p-0">
+		<li class="tw-flex tw-items-center tw-gap-2 tw-py-1 text grey" data-tooltip-content="{{ctx.Locale.Tr "damast.stack.trunk"}}">{{svg "octicon-git-branch" 16}} <code>{{.Stack.Trunk}}</code></li>
+		{{range .Stack.Layers}}
+		{{$st := index $d.Status .PR.ID}}
+		{{$current := eq .PR.ID $d.Stack.Current.PR.ID}}
+		<li class="damast-stack-layer tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-py-1{{if $current}} tw-font-semibold{{end}}" style="margin-left: calc({{.Depth}} * 1.5rem)" data-index="{{.PR.Index}}" data-depth="{{.Depth}}"{{if $current}} aria-current="page"{{end}}>
+			{{if $st.Draft}}
+				<span data-tooltip-content="{{ctx.Locale.Tr "repo.issues.draft_title"}}">{{svg "octicon-git-pull-request-draft" 16 "text grey"}}</span>
+			{{else}}
+				<span data-tooltip-content="{{ctx.Locale.Tr "repo.issues.open_title"}}">{{svg "octicon-git-pull-request" 16 "text green"}}</span>
+			{{end}}
+			<a class="tw-break-anywhere" href="{{.PR.Issue.Link}}">{{.PR.Issue.Title}}</a>
+			<span class="text grey">#{{.PR.Index}}</span>
+			{{if $st.Draft}}<span class="ui tiny label">{{ctx.Locale.Tr "repo.issues.draft_title"}}</span>{{end}}
+			{{if $st.Checks}}<span class="damast-stack-checks" data-state="{{$st.Checks}}" data-tooltip-content="{{ctx.Locale.Tr "damast.stack.checks" $st.Checks}}">{{template "repo/commit_status" (dict "State" $st.Checks)}}</span>{{end}}
+			<code class="text grey tw-text-xs">{{.PR.HeadBranch}}</code>
+			{{if $current}}<span class="ui tiny basic label">{{ctx.Locale.Tr "damast.stack.current"}}</span>{{end}}
+		</li>
+		{{end}}
+	</ol>
+</div>
+{{end}}

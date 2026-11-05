@@ -15366,6 +15366,178 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/pulls/{index}/damast/stack": {
+      "get": {
+        "description": "Layers are the open same-repository pull requests that build on each other (a layer's base branch is the head branch of the layer below). A pull request that is not stacked returns a stack with one layer.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Get the stack of a pull request (Damast)",
+        "operationId": "repoGetPullRequestDamastStack",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "index of the pull request",
+            "name": "index",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastStack"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{index}/damast/stack/merge": {
+      "post": {
+        "description": "Merges the layers below this pull request and the pull request itself, bottom first, each through the normal merge checks (permissions, approvals, required checks, work-in-progress, conflicts). Each layer is retargeted to the trunk before it is merged. Stops at the first layer that cannot be merged; layers merged before that stay merged.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Merge a stack from the bottom up to this pull request (Damast)",
+        "operationId": "repoMergePullRequestDamastStack",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "index of the topmost pull request to merge",
+            "name": "index",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastStackActionOption"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastStackActionResult"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "409": {
+            "$ref": "#/responses/DamastStackActionResult"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{index}/damast/stack/rebase": {
+      "post": {
+        "description": "Rebases every layer, bottom first, onto the current head of the layer below (the bottom layer onto the trunk), with a force-push guarded by the head commit the caller saw. Requires the right to update every layer by rebase. Stops at the first conflict or moved branch; layers rebased before that stay rebased.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Rebase the whole stack of a pull request (Damast)",
+        "operationId": "repoRebasePullRequestDamastStack",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "index of any pull request in the stack",
+            "name": "index",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastStackActionOption"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastStackActionResult"
+          },
+          "403": {
+            "$ref": "#/responses/DamastStackActionResult"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "409": {
+            "$ref": "#/responses/DamastStackActionResult"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
     "/repos/{owner}/{repo}/pulls/{index}/files": {
       "get": {
         "produces": [
@@ -26020,6 +26192,146 @@
       },
       "x-go-package": "forgejo.org/modules/structs"
     },
+    "DamastStack": {
+      "description": "A pull request sits on top of another when its base branch is that one's head branch.",
+      "type": "object",
+      "title": "DamastStack is the stack of pull requests a pull request belongs to (Damast).",
+      "properties": {
+        "current": {
+          "description": "number of the pull request that was asked for",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Current"
+        },
+        "layers": {
+          "description": "layers in pre-order: every parent comes before its children",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastStackLayer"
+          },
+          "x-go-name": "Layers"
+        },
+        "trunk": {
+          "description": "base branch of the bottom layer",
+          "type": "string",
+          "x-go-name": "Trunk"
+        }
+      },
+      "x-go-package": "forgejo.org/modules/structs"
+    },
+    "DamastStackActionOption": {
+      "description": "DamastStackActionOption options for rebasing or merging a stack",
+      "type": "object",
+      "required": [
+        "heads"
+      ],
+      "properties": {
+        "heads": {
+          "description": "head commit of every affected layer, by pull request number, as last seen by the caller;\nthe action stops at a layer whose branch has moved",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "x-go-name": "Heads"
+        },
+        "style": {
+          "description": "merge style for \"merge up to here\"; defaults to the repository's default merge style",
+          "type": "string",
+          "enum": [
+            "merge",
+            "rebase",
+            "rebase-merge",
+            "squash",
+            "fast-forward-only"
+          ],
+          "x-go-name": "Style"
+        }
+      },
+      "x-go-package": "forgejo.org/modules/structs"
+    },
+    "DamastStackActionResult": {
+      "description": "DamastStackActionResult is the outcome of a stack rebase or merge",
+      "type": "object",
+      "properties": {
+        "done": {
+          "description": "numbers of the layers that were rebased or merged, in order",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x-go-name": "Done"
+        },
+        "failed_at": {
+          "description": "number of the layer that stopped the action, 0 on success",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "FailedAt"
+        },
+        "message": {
+          "description": "why it stopped",
+          "type": "string",
+          "x-go-name": "Message"
+        }
+      },
+      "x-go-package": "forgejo.org/modules/structs"
+    },
+    "DamastStackLayer": {
+      "description": "DamastStackLayer is one pull request in a stack",
+      "type": "object",
+      "properties": {
+        "base": {
+          "type": "string",
+          "x-go-name": "Base"
+        },
+        "checks": {
+          "$ref": "#/definitions/CommitStatusState"
+        },
+        "depth": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Depth"
+        },
+        "draft": {
+          "description": "title starts with a work-in-progress prefix",
+          "type": "boolean",
+          "x-go-name": "Draft"
+        },
+        "head": {
+          "type": "string",
+          "x-go-name": "Head"
+        },
+        "head_sha": {
+          "type": "string",
+          "x-go-name": "HeadSHA"
+        },
+        "html_url": {
+          "type": "string",
+          "x-go-name": "HTMLURL"
+        },
+        "number": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Number"
+        },
+        "parent": {
+          "description": "number of the layer below, 0 for the bottom layer",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Parent"
+        },
+        "state": {
+          "description": "open, closed or merged",
+          "type": "string",
+          "x-go-name": "State"
+        },
+        "title": {
+          "type": "string",
+          "x-go-name": "Title"
+        }
+      },
+      "x-go-package": "forgejo.org/modules/structs"
+    },
     "DeleteEmailOption": {
       "description": "DeleteEmailOption options when deleting email addresses",
       "type": "object",
@@ -31943,6 +32255,18 @@
         }
       }
     },
+    "DamastStack": {
+      "description": "DamastStack",
+      "schema": {
+        "$ref": "#/definitions/DamastStack"
+      }
+    },
+    "DamastStackActionResult": {
+      "description": "DamastStackActionResult",
+      "schema": {
+        "$ref": "#/definitions/DamastStackActionResult"
+      }
+    },
     "DeployKey": {
       "description": "DeployKey",
       "schema": {
@@ -33030,6 +33354,12 @@
     },
     "conflict": {
       "description": "APIConflict is a conflict empty response"
+    },
+    "damastParameterBodies": {
+      "description": "not actually a response, just a hack to get go-swagger to include the Damast option structs",
+      "schema": {
+        "$ref": "#/definitions/DamastStackActionOption"
+      }
     },
     "empty": {
       "description": "APIEmpty is an empty response"
