@@ -5,6 +5,7 @@ package integration
 
 import (
 	"bytes"
+	gocontext "context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/setting"
 	api "forgejo.org/modules/structs"
+	damast_packages "forgejo.org/services/damast/packages"
 	repo_service "forgejo.org/services/repository"
 	"forgejo.org/tests"
 
@@ -333,4 +335,41 @@ func TestDamastPackagesOpenFindingNameClaim(t *testing.T) {
 	assert.EqualValues(t, 4, p.RepoID)
 	resp := MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/debian/dists/stable/main/binary-amd64/Packages"), http.StatusOK)
 	assert.Contains(t, resp.Body.String(), "Package: curl")
+}
+
+// Site admins pass reqPackageAccess for every owner; provisional access must not narrow that just because
+// the admin also collaborates on a repository of the owner.
+func TestDamastPackagesSiteAdmin(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	damastPrivateOwner(t)
+	damastCollaborator(t, 4, 1, perm.AccessModeWrite) // user1 is site admin
+	damastPutGeneric(t, "user5", "secret", "1.0", http.StatusCreated)
+
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/generic/secret/1.0/file.bin").AddBasicAuth("user1"), http.StatusOK)
+	damastPutGeneric(t, "user1", "secret", "1.1", http.StatusCreated)
+}
+
+// A request decides access once per package: npm/Maven metadata list every version and file, and
+// recomputing repository permissions for each of them multiplies the queries.
+func TestDamastPackagesReadDecidedOncePerRequest(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	damastPrivateOwner(t)
+	damastPutGeneric(t, "user4", "repo4", "1.0", http.StatusCreated)
+	ctx := db.DefaultContext
+	p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeGeneric, "repo4")
+	require.NoError(t, err)
+
+	user2 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
+	request := func() gocontext.Context {
+		return gocontext.WithValue(ctx, damast_packages.GrantKey, &damast_packages.Grant{Mode: perm.AccessModeRead, Doer: user2})
+	}
+	rctx := request()
+	require.NoError(t, damast_packages.CheckRead(rctx, p))
+
+	_, err = db.GetEngine(ctx).Where("repo_id = 4 AND user_id = 2").Delete(&repo_model.Collaboration{})
+	require.NoError(t, err)
+	_, err = db.GetEngine(ctx).Where("repo_id = 4 AND user_id = 2").Delete(&access_model.Access{})
+	require.NoError(t, err)
+	require.NoError(t, damast_packages.CheckRead(rctx, p), "same request: decided once")
+	require.ErrorIs(t, damast_packages.CheckRead(request(), p), packages_model.ErrPackageNotExist, "next request: decided again")
 }

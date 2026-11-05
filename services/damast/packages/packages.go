@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strings"
+	"sync"
 
 	actions_model "forgejo.org/models/actions"
 	"forgejo.org/models/damast"
@@ -45,6 +46,8 @@ type Grant struct {
 	Reducer authz.AuthorizationReducer
 
 	denied bool
+	mu     sync.Mutex
+	read   map[int64]error // CheckRead per package ID: metadata requests ask once per version and file
 }
 
 // Denied reports whether OnWrite rejected this request.
@@ -104,6 +107,20 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 	if g == nil || g.Mode != perm.AccessModeRead {
 		return nil
 	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err, ok := g.read[p.ID]; ok {
+		return err
+	}
+	if g.read == nil {
+		g.read = map[int64]error{}
+	}
+	err := checkRead(ctx, g, p)
+	g.read[p.ID] = err
+	return err
+}
+
+func checkRead(ctx context.Context, g *Grant, p *packages_model.Package) error {
 	repo, err := inheritedRepo(ctx, p)
 	if err != nil {
 		return err
@@ -122,7 +139,8 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 }
 
 // OnReadFile is CheckRead for file downloads.
-// shortcut: loads version and package per file (only under a read grant), cache per request if it shows up in profiles.
+// shortcut: still loads version and package per file (two primary-key reads, only under a read grant; the
+// permission decision itself is cached per request), cache them too if it shows up in profiles.
 func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
 		return nil

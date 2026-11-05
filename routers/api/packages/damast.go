@@ -33,7 +33,8 @@ func damastProvisionalAccess(ctx *context.Context) {
 		return
 	}
 	mode := damastRequestMode(ctx.Req)
-	if mode == perm.AccessModeNone || ctx.Package.AccessMode >= mode {
+	// site admins pass reqPackageAccess anyway; a Grant would only narrow them to their repositories
+	if mode == perm.AccessModeNone || ctx.Package.AccessMode >= mode || ctx.IsUserSiteAdmin() {
 		return
 	}
 	_, taskID := ctx.Authentication.ActionsTaskID().Get()
