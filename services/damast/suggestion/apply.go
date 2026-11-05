@@ -30,6 +30,7 @@ import (
 var (
 	ErrNotAllowed = errors.New("not_allowed")
 	ErrClosed     = errors.New("closed")
+	ErrEdited     = errors.New("edited")
 	ErrInvalid    = errors.New("invalid")
 	ErrOutdated   = errors.New("outdated")
 	ErrOverlap    = errors.New("overlap")
@@ -38,6 +39,7 @@ var (
 var errStatus = map[error]int{
 	ErrNotAllowed: http.StatusForbidden,
 	ErrClosed:     http.StatusConflict,
+	ErrEdited:     http.StatusConflict,
 	ErrInvalid:    http.StatusUnprocessableEntity,
 	ErrOutdated:   http.StatusConflict,
 	ErrOverlap:    http.StatusConflict,
@@ -56,7 +58,9 @@ func ErrorKey(err error) (key string, status int) {
 // Apply commits the suggestions of the given review comments to the head
 // branch of pr as one commit, credits their authors with Co-authored-by
 // trailers and resolves their conversations. It returns the new commit ID.
-func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequest, commentIDs []int64, message string) (string, error) {
+// versions maps comment IDs to the content version the doer has seen; a comment
+// edited since then is refused, so nobody commits a suggestion they haven't seen.
+func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequest, commentIDs []int64, versions map[int64]int, message string) (string, error) {
 	if err := pr.LoadIssue(ctx); err != nil {
 		return "", err
 	}
@@ -86,6 +90,9 @@ func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequ
 		}
 		if c.IssueID != pr.IssueID {
 			return "", fmt.Errorf("%w: comment %d not found", ErrInvalid, id)
+		}
+		if v, ok := versions[id]; ok && v != c.ContentVersion {
+			return "", fmt.Errorf("%w: comment %d", ErrEdited, id)
 		}
 		if err := c.LoadReview(ctx); err != nil && !issues_model.IsErrReviewNotExist(err) {
 			return "", err

@@ -18,16 +18,18 @@ import (
 
 // DamastSuggestion is a review suggestion in the Damast API.
 type DamastSuggestion struct {
-	CommentID  int64    `json:"comment_id"`
-	ReviewID   int64    `json:"review_id"`
-	Author     string   `json:"author"`
-	Path       string   `json:"path"`
-	StartLine  int64    `json:"start_line"`
-	EndLine    int64    `json:"end_line"`
-	Old        []string `json:"old_lines"`
-	New        []string `json:"new_lines"`
-	Resolved   bool     `json:"resolved"`
-	Applicable bool     `json:"applicable"`
+	CommentID int64 `json:"comment_id"`
+	// ContentVersion counts edits of the comment; pass it back in content_versions to refuse edited suggestions.
+	ContentVersion int      `json:"content_version"`
+	ReviewID       int64    `json:"review_id"`
+	Author         string   `json:"author"`
+	Path           string   `json:"path"`
+	StartLine      int64    `json:"start_line"`
+	EndLine        int64    `json:"end_line"`
+	Old            []string `json:"old_lines"`
+	New            []string `json:"new_lines"`
+	Resolved       bool     `json:"resolved"`
+	Applicable     bool     `json:"applicable"`
 	// Problem is why it can't be applied: "multiple", "old_side" or "outdated"; empty otherwise.
 	Problem string `json:"problem,omitempty"`
 	HTMLURL string `json:"html_url"`
@@ -37,6 +39,13 @@ type DamastSuggestion struct {
 type DamastApplySuggestionsOption struct {
 	CommentIDs []int64 `json:"comment_ids" binding:"Required"`
 	Message    string  `json:"message"`
+	// ContentVersions maps comment IDs to the content_version the client has shown; edited comments are refused.
+	ContentVersions map[int64]int `json:"content_versions"`
+}
+
+// DamastApplySuggestionsResult is the commit that applied the suggestions.
+type DamastApplySuggestionsResult struct {
+	Commit string `json:"commit"`
 }
 
 func damastPullRequest(ctx *context.APIContext) *issues_model.PullRequest {
@@ -54,6 +63,33 @@ func damastPullRequest(ctx *context.APIContext) *issues_model.PullRequest {
 // DamastListSuggestions lists the review suggestions of a pull request.
 // GET /repos/{owner}/{repo}/pulls/{index}/damast/suggestions
 func DamastListSuggestions(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/pulls/{index}/damast/suggestions repository repoDamastListSuggestions
+	// ---
+	// summary: List the suggested changes in a pull request's submitted reviews (Damast)
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: index
+	//   in: path
+	//   description: index of the pull request
+	//   type: integer
+	//   format: int64
+	//   required: true
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastSuggestionList"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	pr := damastPullRequest(ctx)
 	if pr == nil {
 		return
@@ -95,18 +131,19 @@ func DamastListSuggestions(ctx *context.APIContext) {
 		}
 		c.Issue = pr.Issue
 		out = append(out, DamastSuggestion{
-			CommentID:  c.ID,
-			ReviewID:   c.ReviewID,
-			Author:     c.Poster.Name,
-			Path:       c.TreePath,
-			StartLine:  int64(c.UnsignedLine()),
-			EndLine:    int64(c.UnsignedDisplayLine()),
-			Old:        s.Old,
-			New:        s.New,
-			Resolved:   c.IsResolved(),
-			Applicable: canApply && s.Problem == "",
-			Problem:    strings.TrimPrefix(s.Problem, "damast.suggestions."),
-			HTMLURL:    c.HTMLURL(ctx),
+			CommentID:      c.ID,
+			ContentVersion: c.ContentVersion,
+			ReviewID:       c.ReviewID,
+			Author:         c.Poster.Name,
+			Path:           c.TreePath,
+			StartLine:      int64(c.UnsignedLine()),
+			EndLine:        int64(c.UnsignedDisplayLine()),
+			Old:            s.Old,
+			New:            s.New,
+			Resolved:       c.IsResolved(),
+			Applicable:     canApply && s.Problem == "",
+			Problem:        strings.TrimPrefix(s.Problem, "damast.suggestions."),
+			HTMLURL:        c.HTMLURL(ctx),
 		})
 	}
 	ctx.JSON(http.StatusOK, out)
@@ -115,12 +152,52 @@ func DamastListSuggestions(ctx *context.APIContext) {
 // DamastApplySuggestions commits review suggestions to the head branch as one commit.
 // POST /repos/{owner}/{repo}/pulls/{index}/damast/suggestions/apply
 func DamastApplySuggestions(ctx *context.APIContext) {
+	// swagger:operation POST /repos/{owner}/{repo}/pulls/{index}/damast/suggestions/apply repository repoDamastApplySuggestions
+	// ---
+	// summary: Commit suggested changes to the pull request's head branch as one commit (Damast)
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: index
+	//   in: path
+	//   description: index of the pull request
+	//   type: integer
+	//   format: int64
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastApplySuggestionsOption"
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastApplySuggestionsResult"
+	//   "403":
+	//     "$ref": "#/responses/forbidden"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "409":
+	//     "$ref": "#/responses/error"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	pr := damastPullRequest(ctx)
 	if pr == nil {
 		return
 	}
 	form := web.GetForm(ctx).(*DamastApplySuggestionsOption)
-	sha, err := suggestion_service.Apply(ctx, ctx.Doer(), pr, form.CommentIDs, form.Message)
+	sha, err := suggestion_service.Apply(ctx, ctx.Doer(), pr, form.CommentIDs, form.ContentVersions, form.Message)
 	if err != nil {
 		key, status := suggestion_service.ErrorKey(err)
 		if key == "" {
@@ -130,5 +207,5 @@ func DamastApplySuggestions(ctx *context.APIContext) {
 		ctx.Error(status, "", errors.New(translation.NewLocale("en-US").TrString(key)+" ("+err.Error()+")"))
 		return
 	}
-	ctx.JSON(http.StatusOK, map[string]string{"commit": sha})
+	ctx.JSON(http.StatusOK, DamastApplySuggestionsResult{Commit: sha})
 }

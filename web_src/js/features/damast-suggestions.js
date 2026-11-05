@@ -50,7 +50,11 @@ async function submit(block) {
     return;
   }
   const data = new FormData();
-  for (const id of pending) data.append('comment_ids', id);
+  for (const id of pending) {
+    data.append('comment_ids', id);
+    // the server refuses comments edited since this page was loaded
+    data.append('content_versions', document.querySelector(`.damast-suggestion[data-comment-id="${id}"]`).getAttribute('data-content-version'));
+  }
   data.append('message', form.querySelector('textarea').value);
   const button = form.querySelector('.damast-suggestion-submit');
   button.classList.add('loading');
