@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"forgejo.org/models/avatars"
+	damast_model "forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	"forgejo.org/models/organization"
 	repo_model "forgejo.org/models/repo"
@@ -367,6 +368,9 @@ func UpdateUIThemePost(ctx *context.Context) {
 	if err := user_service.UpdateUser(ctx, ctx.Doer, opts); err != nil {
 		ctx.Flash.Error("UpdateUser err")
 	} else {
+		if err := damast_model.RecordThemeChoice(ctx, ctx.Doer.ID, form.Theme); err != nil { // DAMAST: remember an explicit forgejo-auto
+			log.Error("damast: RecordThemeChoice: %v", err)
+		}
 		ctx.Flash.Success(ctx.Tr("settings.theme_update_success"))
 	}
 

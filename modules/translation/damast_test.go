@@ -48,7 +48,9 @@ func TestDamastLocaleFiles(t *testing.T) {
 			_, err := os.Stat(filepath.Join("../../options/locale_next", "locale_"+lang+".json"))
 			require.NoError(t, err, "Forgejo has no language %s", lang)
 			for key, msg := range damastMessages(t, f) {
-				assert.True(t, strings.HasPrefix(key, "damast."), "key %s must start with damast.", key)
+				// themes.names.<theme> is the name Forgejo looks up for a theme; Forgejo never has damast-* themes
+				assert.True(t, strings.HasPrefix(key, "damast.") || strings.HasPrefix(key, "themes.names.damast-"),
+					"key %s must start with damast. or themes.names.damast-", key)
 				base, form, _ := strings.Cut(key, "#")
 				ref, ok := en[key]
 				if !ok && form != "" {
@@ -85,4 +87,5 @@ func TestDamastLocaleFallback(t *testing.T) {
 		assert.Equal(t, "Repository access", NewLocale("fr-FR").TrString("damast.packages.repo_access"))
 	}
 	assert.Equal(t, "2 weitere Personen", string(NewLocale("de-DE").TrN(2, "damast.coauthors.others", "damast.coauthors.others", 2)))
+	assert.Equal(t, "Damast dunkel", NewLocale("de-DE").TrString("themes.names.damast-dark"))
 }
