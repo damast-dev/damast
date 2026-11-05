@@ -32,6 +32,8 @@ import (
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/util"
 	"forgejo.org/services/authz"
+
+	"xorm.io/builder"
 )
 
 type grantKey struct{}
@@ -41,9 +43,10 @@ var GrantKey = grantKey{}
 
 // Grant is provisional access (read or write); OnWrite / CheckRead decide per package.
 type Grant struct {
-	Mode perm.AccessMode
-	Doer *user_model.User
-	Task *actions_model.ActionTask // set when authenticated with an Actions token
+	Mode    perm.AccessMode
+	Doer    *user_model.User
+	OwnerID int64
+	Task    *actions_model.ActionTask // set when authenticated with an Actions token
 	// Reducer limits repository permissions like the token does elsewhere (public-only tokens); nil = none
 	Reducer authz.AuthorizationReducer
 
@@ -84,7 +87,7 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 		if repo.OwnerID != owner.ID || (task.IsForkPullRequest && mode >= perm.AccessModeWrite) {
 			return nil, nil
 		}
-		return &Grant{Mode: mode, Doer: doer, Task: task}, nil
+		return &Grant{Mode: mode, Doer: doer, OwnerID: owner.ID, Task: task}, nil
 	}
 	if !doer.IsAccessAllowed(ctx) {
 		return nil, nil // prohibited, inactive or missing required 2FA: Forgejo grants no package access either
@@ -96,13 +99,57 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 	if err != nil || !has {
 		return nil, err
 	}
-	return &Grant{Mode: mode, Doer: doer}, nil
+	return &Grant{Mode: mode, Doer: doer, OwnerID: owner.ID}, nil
+}
+
+// ReadGrant returns a read Grant for doer on owner's packages (nil if doer reads no repository of owner),
+// and checks pd, the package version a route already loaded: ErrPackageNotExist if doer may not read it.
+func ReadGrant(ctx context.Context, owner, doer *user_model.User, taskID int64, reducer authz.AuthorizationReducer, pd *packages_model.PackageDescriptor) (*Grant, error) {
+	g, err := NewGrant(ctx, perm.AccessModeRead, owner, doer, taskID)
+	if err != nil || g == nil {
+		return nil, err
+	}
+	g.Reducer = reducer
+	if pd != nil {
+		if err := checkRead(ctx, g, pd.Package); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
+}
+
+// readableCond limits package searches under a read Grant to what CheckRead lets through: packages of the
+// owner that inherit access from a repository of the same owner that the reader may read.
+func readableCond(ctx context.Context) (builder.Cond, error) {
+	g := grantFrom(ctx)
+	if g == nil || g.Mode != perm.AccessModeRead {
+		return nil, nil
+	}
+	inheriting := builder.Select("package_id").From("damast_package_policy").Where(builder.Eq{"inherit_repo_access": true})
+	repos := make([]*repo_model.Repository, 0, 10)
+	if err := db.GetEngine(ctx).Where(builder.Eq{"owner_id": g.OwnerID}).
+		And(builder.In("id", builder.Select("repo_id").From("package").Where(builder.Eq{"owner_id": g.OwnerID}.And(builder.In("id", inheriting))))).
+		Find(&repos); err != nil {
+		return nil, err
+	}
+	readable := make([]int64, 0, len(repos))
+	for _, repo := range repos {
+		rp, err := repoPermission(ctx, g, g.Doer, repo)
+		if err != nil {
+			return nil, err
+		}
+		if rp.CanRead(unit.TypePackages) {
+			readable = append(readable, repo.ID)
+		}
+	}
+	return builder.Eq{"package.owner_id": g.OwnerID}.And(builder.In("package.repo_id", readable), builder.In("package.id", inheriting)), nil
 }
 
 func init() {
 	packages_model.DamastCheckRead = CheckRead
 	packages_model.DamastCheckReadFile = OnReadFile
 	packages_model.DamastCheckReadPackageID = checkReadPackageID
+	packages_model.DamastReadableCond = readableCond
 	packages_model.DamastReadGrant = func(ctx context.Context) bool {
 		g := grantFrom(ctx)
 		return g != nil && g.Mode == perm.AccessModeRead

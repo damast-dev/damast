@@ -352,6 +352,9 @@ func SearchVersions(ctx context.Context, opts *PackageSearchOptions) ([]*Package
 		Where(opts.ToConds())
 
 	opts.configureOrderBy(sess)
+	if err := damastLimit(ctx, sess); err != nil { // DAMAST: repo-bound packages
+		return nil, 0, err
+	}
 
 	if opts.Paginator != nil {
 		sess = db.SetSessionPagination(sess, opts)
@@ -378,6 +381,9 @@ func SearchLatestVersions(ctx context.Context, opts *PackageSearchOptions) ([]*P
 		Where(builder.In("package_version.id", in))
 
 	opts.configureOrderBy(sess)
+	if err := damastLimit(ctx, sess); err != nil { // DAMAST: repo-bound packages
+		return nil, 0, err
+	}
 
 	if opts.Paginator != nil {
 		sess = db.SetSessionPagination(sess, opts)

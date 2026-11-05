@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -121,4 +122,40 @@ func TestDamastPackageSettingsAPI(t *testing.T) {
 
 	MakeRequest(t, NewRequest(t, "GET", "/api/v1/damast/packages/user5/generic/missing/settings").AddTokenAuth(owner), http.StatusNotFound)
 	MakeRequest(t, NewRequest(t, "GET", "/api/v1/damast/packages/user5/nope/repo4/settings").AddTokenAuth(owner), http.StatusNotFound)
+}
+
+// Unlinking (or moving the link to another repository) turns repository access off: the next repository's
+// readers and writers only count once an owner switches it on again.
+func TestDamastPackagesUnlinkResetsInherit(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+	damastPutGeneric(t, "user5", "repo4", "1.0", http.StatusCreated)
+	p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeGeneric, "repo4")
+	require.NoError(t, err)
+	inherits := func() bool {
+		t.Helper()
+		on, err := damast.InheritsRepoAccess(ctx, p.ID)
+		require.NoError(t, err)
+		return on
+	}
+	require.True(t, inherits())
+
+	owner := getUserToken(t, "user5", auth_model.AccessTokenScopeWritePackage, auth_model.AccessTokenScopeWriteRepository)
+	MakeRequest(t, NewRequest(t, "POST", "/api/v1/packages/user5/generic/repo4/-/unlink").AddTokenAuth(owner), http.StatusNoContent)
+	assert.False(t, inherits(), "unlink turns it off")
+	MakeRequest(t, NewRequest(t, "POST", "/api/v1/packages/user5/generic/repo4/-/link/repo4").AddTokenAuth(owner), http.StatusCreated)
+	assert.False(t, inherits(), "relinking doesn't turn it on")
+	damastPutGeneric(t, "user4", "repo4", "1.1", http.StatusForbidden)
+
+	require.NoError(t, damast.SetInheritRepoAccess(ctx, p.ID, true))
+	other := damastRepo(t, unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 5}), "other", true)
+	s := loginUser(t, "user5")
+	s.MakeRequest(t, NewRequestWithValues(t, "POST", "/user5/-/packages/generic/repo4/1.0/settings", map[string]string{
+		"action": "link", "repo_id": fmt.Sprint(other.ID),
+	}), http.StatusSeeOther)
+	p, err = packages_model.GetPackageByID(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, other.ID, p.RepoID)
+	assert.False(t, inherits(), "moving the link to another repository turns it off")
 }

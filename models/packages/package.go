@@ -248,6 +248,9 @@ func DeletePackageByID(ctx context.Context, packageID int64) error {
 
 // SetRepositoryLink sets the linked repository
 func SetRepositoryLink(ctx context.Context, packageID, repoID int64) error {
+	if err := damast.ResetInheritOnRelink(ctx, packageID, repoID); err != nil { // DAMAST: repo-bound packages
+		return err
+	}
 	n, err := db.GetEngine(ctx).ID(packageID).Cols("repo_id").Update(&Package{RepoID: repoID})
 	if n == 0 && err == nil {
 		return ErrPackageNotExist
@@ -256,6 +259,9 @@ func SetRepositoryLink(ctx context.Context, packageID, repoID int64) error {
 }
 
 func UnlinkRepository(ctx context.Context, packageID int64) error {
+	if err := damast.ResetInheritOnRelink(ctx, packageID, 0); err != nil { // DAMAST: repo-bound packages
+		return err
+	}
 	_, err := db.GetEngine(ctx).ID(packageID).Cols("repo_id").Update(&Package{RepoID: 0})
 	return err
 }

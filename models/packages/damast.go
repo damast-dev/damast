@@ -6,6 +6,9 @@ package packages
 import (
 	"context"
 	"errors"
+
+	"code.forgejo.org/xorm/xorm"
+	"xorm.io/builder"
 )
 
 // DamastCheckRead is set by services/damast/packages; it rejects reads under provisional read access
@@ -34,4 +37,20 @@ func DamastHidden(ctx context.Context, ownerID int64, packageType Type, name str
 		return true, nil
 	}
 	return false, err
+}
+
+// DamastReadableCond returns, under provisional read access, a condition on the joined package table that
+// keeps only the packages the reader may read (nil: no limit). Searches use it, so lists, counts and pages
+// only cover readable packages.
+var DamastReadableCond func(ctx context.Context) (builder.Cond, error)
+
+func damastLimit(ctx context.Context, sess *xorm.Session) error {
+	if DamastReadableCond == nil {
+		return nil
+	}
+	cond, err := DamastReadableCond(ctx)
+	if err == nil && cond != nil {
+		sess.And(cond)
+	}
+	return err
 }

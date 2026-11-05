@@ -10,8 +10,10 @@ import (
 
 	"forgejo.org/models/damast"
 	packages_model "forgejo.org/models/packages"
+	"forgejo.org/models/perm"
 	"forgejo.org/modules/json"
 	"forgejo.org/services/context"
+	damast_packages "forgejo.org/services/damast/packages"
 )
 
 // DamastOwnerPackageSettings are an owner's Damast package settings.
@@ -233,4 +235,25 @@ func damastServePackageSettings(ctx *context.APIContext, p *packages_model.Packa
 		return
 	}
 	ctx.JSON(http.StatusOK, DamastPackageSettings{InheritRepoAccess: inherit})
+}
+
+// DamastReadAccess lets readers of a repository of the owner read the packages that inherit its access
+// (GET only), like the registries do: lists only contain them, and others answer like missing packages.
+func DamastReadAccess(ctx *context.APIContext) {
+	p := ctx.Package()
+	if p == nil || p.Owner == nil || p.AccessMode >= perm.AccessModeRead || ctx.IsUserSiteAdmin() ||
+		(ctx.Req.Method != http.MethodGet && ctx.Req.Method != http.MethodHead) {
+		return
+	}
+	_, taskID := ctx.Authentication().ActionsTaskID().Get()
+	g, err := damast_packages.ReadGrant(ctx, p.Owner, ctx.Doer(), taskID, ctx.Authentication().Reducer(), p.Descriptor)
+	switch {
+	case errors.Is(err, packages_model.ErrPackageNotExist):
+		ctx.Error(http.StatusNotFound, "GetVersionByNameAndVersion", packages_model.ErrPackageNotExist) // as for a missing one
+	case err != nil:
+		ctx.InternalServerError(err)
+	case g != nil:
+		p.AccessMode = perm.AccessModeRead
+		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
+	}
 }

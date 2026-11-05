@@ -36,6 +36,14 @@ func DeleteOwnerPackageData(ctx context.Context, ownerID int64) error {
 	return err
 }
 
+// ResetInheritOnRelink turns repository access off when a package's link is removed or moved to another
+// repository: the new repository's readers and writers only count once an owner opts in again.
+func ResetInheritOnRelink(ctx context.Context, packageID, repoID int64) error {
+	moved := builder.Select("id").From("package").Where(builder.Eq{"id": packageID}.And(builder.Neq{"repo_id": 0}, builder.Neq{"repo_id": repoID}))
+	_, err := db.GetEngine(ctx).Where(builder.In("package_id", moved)).Cols("inherit_repo_access").Update(&PackagePolicy{InheritRepoAccess: false})
+	return err
+}
+
 func deletePackagePolicies(ctx context.Context, packageCond builder.Cond) error {
 	_, err := db.GetEngine(ctx).Where(builder.In("package_id", builder.Select("id").From("package").Where(packageCond))).
 		Delete(&PackagePolicy{})
