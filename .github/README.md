@@ -47,7 +47,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Workflows publish with their built-in token. Pull requests from forks can only read.
 - **New package names are for owners by default.** A new name is claimed for the whole user or organization, and some registries put it into one signed index per owner: a workflow that publishes `curl 99` to your Debian repository would reach everyone who installs from it. So out of the box only people who can publish for the owner (Forgejo's rule) create packages; repository writers and workflows publish new versions of packages that are already linked to their repository. Owners can open this up under *Settings → Packages → Who may create new packages*: then repository writers and workflows create new names too, but only in the registries GitHub Packages has (container, npm, Maven, NuGet, RubyGems) plus generic. GitHub has no Debian, RPM, PyPI, Cargo, Conan, pub, ... registry, so new names there always stay with the owner. The same setting is at `GET`/`PATCH /api/v1/damast/packages/{owner}/settings`.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
-- One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
+- One switch per package turns this off (also at `GET`/`PATCH /api/v1/damast/packages/{owner}/{type}/{name}/settings`). Packages that existed before you switched keep Forgejo's rules. Deleting a package, its repository or its owner deletes these settings too.
 
 ### Its own name
 

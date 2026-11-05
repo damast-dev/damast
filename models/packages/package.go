@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"forgejo.org/models/damast" // DAMAST:
 	"forgejo.org/models/db"
 	"forgejo.org/modules/util"
 
@@ -238,6 +239,9 @@ func DeletePackageByID(ctx context.Context, packageID int64) error {
 	n, err := db.GetEngine(ctx).ID(packageID).Delete(&Package{})
 	if n == 0 && err == nil {
 		return ErrPackageNotExist
+	}
+	if err == nil { // DAMAST: repo-bound packages
+		err = damast.DeletePackagePolicy(ctx, packageID)
 	}
 	return err
 }

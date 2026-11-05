@@ -1270,9 +1270,11 @@ func Routes() *web.Route {
 
 			m.Get("/", packages.ListPackages)
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), reqPackageAccess(perm.AccessModeRead), checkTokenPublicOnly())
-		m.Group("/damast/packages/{username}", func() { // DAMAST: owner package settings
-			m.Combo("/settings").Get(packages.DamastGetSettings).Patch(packages.DamastEditSettings)
-		}, reqToken(), tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), reqPackageAccess(perm.AccessModeOwner), checkTokenPublicOnly())
+		m.Group("/damast/packages/{username}", func() { // DAMAST: package settings
+			m.Combo("/settings", reqPackageAccess(perm.AccessModeOwner)).Get(packages.DamastGetOwnerSettings).Patch(packages.DamastEditOwnerSettings)
+			m.Combo("/{type}/{name}/settings").Get(reqPackageAccess(perm.AccessModeRead), packages.DamastGetPackageSettings).
+				Patch(reqPackageAccess(perm.AccessModeWrite), packages.DamastEditPackageSettings)
+		}, reqToken(), tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), checkTokenPublicOnly())
 
 		// Organizations
 		m.Get("/user/orgs", reqToken(), tokenRequiresScopes(auth_model.AccessTokenScopeCategoryUser, auth_model.AccessTokenScopeCategoryOrganization), org.ListMyOrgs)
