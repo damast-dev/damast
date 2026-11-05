@@ -25,7 +25,7 @@
 			<div class="ui warning message" id="damast-advisory-private">{{svg "octicon-lock"}} {{ctx.Locale.Tr "damast.security.private_notice"}}</div>
 		{{end}}
 
-		<div class="ui grid">
+		<div class="ui stackable grid">
 			<div class="eleven wide column">
 				<div class="ui segment markup" id="damast-advisory-description">{{.DamastDescription}}</div>
 
@@ -76,7 +76,7 @@
 								{{end}}
 							</div>
 						{{end}}
-						<form class="ui form" action="{{$link}}/comments" method="post">
+						{{if not .DamastReadOnly}}<form class="ui form" action="{{$link}}/comments" method="post">
 							{{template "shared/combomarkdowneditor" (dict
 								"MarkdownPreviewUrl" (print .RepoLink "/markup")
 								"MarkdownPreviewContext" .RepoLink
@@ -84,15 +84,15 @@
 								"TextareaAriaLabel" (ctx.Locale.Tr "damast.security.discussion")
 							)}}
 							<button class="ui primary button tw-mt-2">{{ctx.Locale.Tr "repo.issues.create_comment"}}</button>
-						</form>
+						</form>{{end}}
 					</div>
 				{{end}}
 			</div>
 
 			<div class="five wide column">
-				{{if .DamastIsAdvisoryAdmin}}
+				{{if and .DamastIsAdvisoryAdmin (ne $a.State "withdrawn")}}
 					<div class="ui segment" id="damast-advisory-actions">
-						<form class="ui form" action="{{$link}}/state" method="post">
+						<form class="ui form" action="{{$link}}/state" method="post"{{if eq $a.State "published"}} data-damast-confirm="{{ctx.Locale.Tr "damast.security.withdraw_confirm"}}"{{end}}>
 							{{if eq $a.State "triage"}}
 								<button class="ui primary fluid button tw-mb-2" name="state" value="draft">{{ctx.Locale.Tr "damast.security.action.accept"}}</button>
 								<button class="ui basic red fluid button" name="state" value="closed">{{ctx.Locale.Tr "damast.security.action.close"}}</button>
@@ -123,7 +123,7 @@
 					{{if .DamastCredits}}
 						<p><b>{{ctx.Locale.Tr "damast.security.field.credits"}}</b></p>
 						{{range .DamastCredits}}
-							<div>{{ctx.AvatarUtils.Avatar .User 20}} <a href="{{.User.HomeLink}}">{{.User.GetDisplayName}}</a> <span class="text grey">{{.Type}}</span></div>
+							<div>{{ctx.AvatarUtils.Avatar .User 20}} <a href="{{.User.HomeLink}}">{{.User.GetDisplayName}}</a> <span class="text grey">{{ctx.Locale.Tr (print "damast.security.credit_type." .Type)}}</span></div>
 						{{end}}
 					{{end}}
 				</div>
@@ -149,7 +149,7 @@
 						{{end}}
 						{{if .DamastIsAdvisoryAdmin}}
 							<form class="ui form tw-mt-2" action="{{$link}}/collaborators" method="post">
-								<div class="ui action input tw-w-full">
+								<div class="ui fluid action input">
 									<input name="username" placeholder="{{ctx.Locale.Tr "username"}}" aria-label="{{ctx.Locale.Tr "username"}}" required>
 									<button class="ui button">{{ctx.Locale.Tr "add"}}</button>
 								</div>

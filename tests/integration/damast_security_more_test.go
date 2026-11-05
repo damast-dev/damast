@@ -191,3 +191,34 @@ func TestDamastSecurityCommentEdit(t *testing.T) {
 	wrong := strings.Replace(api, fmt.Sprint(c.ID), fmt.Sprint(c2.ID), 1)
 	MakeRequest(t, NewRequestWithJSON(t, "PATCH", wrong, map[string]any{"body": "x"}).AddTokenAuth(forgery.CreateAccessToken(t, owner, nil).Token), http.StatusNotFound)
 }
+
+// TestDamastSecurityPatchSeverityWithCVSS: a severity that the CVSS score would override is rejected instead
+// of being dropped silently; the matching severity (also GitHub's "medium") and clearing the vector work.
+func TestDamastSecurityPatchSeverityWithCVSS(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	owner := forgery.CreateUser(t, nil)
+	repo := forgery.CreateRepository(t, owner, nil)
+	token := forgery.CreateAccessToken(t, owner, nil).Token
+	a, err := security.Create(ctx, repo, owner, &security.Input{Title: "t", Description: "d", CVSSVector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"})
+	require.NoError(t, err)
+	require.Equal(t, "critical", a.Severity)
+	url := "/api/v1/repos/" + repo.FullName() + "/security-advisories/" + a.AdvisoryID
+	patch := func(body map[string]any, status int) *security.APIAdvisory {
+		t.Helper()
+		var r security.APIAdvisory
+		resp := MakeRequest(t, NewRequestWithJSON(t, "PATCH", url, body).AddTokenAuth(token), status)
+		if status == http.StatusOK {
+			DecodeJSON(t, resp, &r)
+		}
+		return &r
+	}
+
+	patch(map[string]any{"severity": "low"}, http.StatusUnprocessableEntity)
+	patch(map[string]any{"severity": "low", "cvss_vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"}, http.StatusUnprocessableEntity) // 7.5: high
+	assert.Equal(t, "critical", patch(map[string]any{"severity": "critical"}, http.StatusOK).Severity)
+	assert.Equal(t, "medium", patch(map[string]any{"severity": "medium", "cvss_vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"}, http.StatusOK).Severity) // 5.4
+	r := patch(map[string]any{"severity": "low", "cvss_vector_string": ""}, http.StatusOK)
+	assert.Equal(t, "low", r.Severity)
+	assert.Nil(t, r.CVSS)
+}

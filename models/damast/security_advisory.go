@@ -6,11 +6,13 @@ package damast
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"time"
 
 	"forgejo.org/models/db"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/setting"
 	"forgejo.org/modules/timeutil"
 	"forgejo.org/modules/util"
 
@@ -62,6 +64,8 @@ type SecurityAdvisory struct {
 	PublishedUnix timeutil.TimeStamp
 	ClosedUnix    timeutil.TimeStamp
 	WithdrawnUnix timeutil.TimeStamp // OSV "withdrawn"
+	AcceptedUnix  timeutil.TimeStamp // a private report was accepted (GitHub's submission.accepted)
+	PublisherID   int64              `xorm:"NOT NULL DEFAULT 0"` // who published it (GitHub's publisher)
 }
 
 func (SecurityAdvisory) TableName() string { return "damast_security_advisory" }
@@ -164,6 +168,27 @@ func UpdateAdvisory(ctx context.Context, a *SecurityAdvisory, cols ...string) er
 		sess = sess.AllCols()
 	}
 	_, err := sess.Update(a)
+	return err
+}
+
+// UpdateAdvisoryState saves the state columns only if the stored state is still old, so that two concurrent
+// changes cannot both pass the transition check. It reports whether the row was updated.
+func UpdateAdvisoryState(ctx context.Context, a *SecurityAdvisory, old string, cols ...string) (bool, error) {
+	n, err := db.GetEngine(ctx).ID(a.ID).And("state = ?", old).Cols(cols...).Update(a)
+	return n == 1, err
+}
+
+// LockReporter holds a row lock on the user until the transaction ends, so that counting a reporter's reports and
+// inserting a new one cannot interleave with another request of the same reporter. It only reads the row.
+// SQLite needs no lock: Forgejo opens its transactions IMMEDIATE, which locks the whole database for writing.
+func LockReporter(ctx context.Context, userID int64) error {
+	if !db.InTransaction(ctx) {
+		return errors.New("LockReporter needs a transaction")
+	}
+	if setting.Database.Type.IsSQLite3() {
+		return nil
+	}
+	_, err := db.GetEngine(ctx).ID(userID).Cols("id").ForUpdate().Get(new(user_model.User))
 	return err
 }
 
@@ -284,6 +309,21 @@ func DeleteRepoSecurityData(ctx context.Context, repoID int64) error {
 	return err
 }
 
+// DeleteAdvisory removes an advisory with its comments and collaborators.
+func DeleteAdvisory(ctx context.Context, id int64) error {
+	return db.WithTx(ctx, func(ctx context.Context) error {
+		e := db.GetEngine(ctx)
+		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryComment)); err != nil {
+			return err
+		}
+		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryCollaborator)); err != nil {
+			return err
+		}
+		_, err := e.ID(id).Delete(new(SecurityAdvisory))
+		return err
+	})
+}
+
 // DeleteUserSecurityData runs when a user is deleted: their reports and comments stay and show the ghost
 // user, their advisory collaborations go. Rewriting the ids (instead of keeping dangling ones) means no
 // later account can ever inherit access to the reports.
@@ -293,6 +333,9 @@ func DeleteUserSecurityData(ctx context.Context, userID int64) error {
 		return err
 	}
 	if _, err := e.Table("damast_security_advisory").Where("reporter_id = ?", userID).Update(map[string]any{"reporter_id": user_model.GhostUserID}); err != nil {
+		return err
+	}
+	if _, err := e.Table("damast_security_advisory").Where("publisher_id = ?", userID).Update(map[string]any{"publisher_id": user_model.GhostUserID}); err != nil {
 		return err
 	}
 	if _, err := e.Table("damast_security_advisory").Where("creator_id = ?", userID).Update(map[string]any{"creator_id": user_model.GhostUserID}); err != nil {

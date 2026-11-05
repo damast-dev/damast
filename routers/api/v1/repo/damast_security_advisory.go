@@ -5,13 +5,19 @@ package repo
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"forgejo.org/models/damast"
+	access_model "forgejo.org/models/perm/access"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/log"
 	"forgejo.org/modules/util"
 	"forgejo.org/modules/web"
 	"forgejo.org/services/context"
+	"forgejo.org/services/convert"
 	"forgejo.org/services/damast/security"
 )
 
@@ -31,16 +37,35 @@ func damastAPIError(ctx *context.APIContext, err error) {
 	}
 }
 
+// damastAccess is the doer and permission every advisory check uses. A public-only token gets what an anonymous
+// visitor gets: published advisories only, never drafts, reports or discussions (as GitHub's public_repo scope).
+// checkTokenPublicOnly has already turned such tokens away from private repositories.
+func damastAccess(ctx *context.APIContext) (*user_model.User, *access_model.Permission) {
+	if !ctx.PublicOnly() {
+		return ctx.Doer(), ctx.Permission()
+	}
+	if p, ok := ctx.Data["DamastPublicOnlyPerm"].(*access_model.Permission); ok {
+		return nil, p
+	}
+	p, err := access_model.GetUserRepoPermission(ctx, ctx.Repo().Repository, nil)
+	if err != nil {
+		log.Error("GetUserRepoPermission: %v", err)
+		p = access_model.Permission{} // no access: every check answers 404
+	}
+	ctx.Data["DamastPublicOnlyPerm"] = &p
+	return nil, &p
+}
+
 // DamastAdvisoryReqRead lets only users in who may read the repository's code (or admins).
 func DamastAdvisoryReqRead(ctx *context.APIContext) {
-	if !security.CanReadRepo(ctx.Permission()) {
+	if _, p := damastAccess(ctx); !security.CanReadRepo(p) {
 		ctx.NotFound()
 	}
 }
 
 // DamastAdvisoryReqAdmin lets only repository admins in.
 func DamastAdvisoryReqAdmin(ctx *context.APIContext) {
-	if !security.IsAdmin(ctx.Permission()) {
+	if _, p := damastAccess(ctx); !security.IsAdmin(p) {
 		ctx.NotFound()
 	}
 }
@@ -55,7 +80,8 @@ func DamastAdvisoryAssignment(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 		return
 	}
-	level, err := security.AccessLevel(ctx, ctx.Repo().Repository, a, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	level, err := security.AccessLevel(ctx, ctx.Repo().Repository, a, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -112,24 +138,46 @@ func DamastListAdvisories(ctx *context.APIContext) {
 	//   in: query
 	//   description: only advisories in this state (triage, draft, published, closed, withdrawn)
 	//   type: string
+	// - name: page
+	//   in: query
+	//   description: page number of results to return (1-based)
+	//   type: integer
+	// - name: per_page
+	//   in: query
+	//   description: page size of results (GitHub's name; limit works too)
+	//   type: integer
+	// - name: limit
+	//   in: query
+	//   description: page size of results
+	//   type: integer
 	// responses:
 	//   "200":
 	//     "$ref": "#/responses/DamastSecurityAdvisoryList"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	repo := ctx.Repo().Repository
-	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	state := ctx.FormString("state")
+	if state != "" {
+		if err := security.CheckState(state); err != nil {
+			damastAPIError(ctx, err)
+			return
+		}
+	}
+	list, err := security.Visible(ctx, repo, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
 	}
-	state := ctx.FormString("state")
+	if state != "" {
+		list = slices.DeleteFunc(list, func(a *damast.SecurityAdvisory) bool { return a.State != state })
+	}
+	list = damastPage(ctx, list)
 	res := make([]*security.APIAdvisory, 0, len(list))
 	for _, a := range list {
-		if state != "" && a.State != state {
-			continue
-		}
-		level, err := security.AccessLevel(ctx, repo, a, ctx.Doer(), ctx.Permission())
+		level, err := security.AccessLevel(ctx, repo, a, doer, p)
 		if err != nil {
 			ctx.InternalServerError(err)
 			return
@@ -142,6 +190,29 @@ func DamastListAdvisories(ctx *context.APIContext) {
 		res = append(res, r)
 	}
 	ctx.JSON(http.StatusOK, res)
+}
+
+// damastPage cuts one page out of a list that was loaded in full (see the shortcut in security.Visible) and sets
+// X-Total-Count and Link. per_page is GitHub's name for the page size, limit Forgejo's.
+func damastPage[T any](ctx *context.APIContext, list []T) []T {
+	size := ctx.FormInt("per_page")
+	if size == 0 {
+		size = ctx.FormInt("limit")
+	}
+	size = convert.ToCorrectPageSize(size)
+	page := min(max(ctx.FormInt("page"), 1), len(list)+1) // clamped first, so the product cannot overflow
+	ctx.SetTotalCountHeader(int64(len(list)))
+	ctx.SetLinkHeader(len(list), size)
+	start := min((page-1)*size, len(list))
+	return list[start:min(start+size, len(list))]
+}
+
+// DamastReqWritable refuses changes to an archived repository's advisories with 423 Locked, like Forgejo's other
+// archived writes. It runs after the access checks, so people without access still get a 404.
+func DamastReqWritable(ctx *context.APIContext) {
+	if ctx.Repo().Repository.IsArchived {
+		ctx.Error(http.StatusLocked, "RepoArchived", fmt.Errorf("%s is archived", ctx.Repo().Repository.LogString()))
+	}
 }
 
 // DamastCreateAdvisory creates a draft advisory (repository admins).
@@ -191,7 +262,8 @@ func DamastCreateAdvisory(ctx *context.APIContext) {
 
 // DamastAdvisoryReqReporter lets only users in who may submit a private vulnerability report.
 func DamastAdvisoryReqReporter(ctx *context.APIContext) {
-	ok, err := security.CanReport(ctx, ctx.Repo().Repository, ctx.Doer(), security.CanReadRepo(ctx.Permission()))
+	doer, p := damastAccess(ctx)
+	ok, err := security.CanReport(ctx, ctx.Repo().Repository, doer, security.CanReadRepo(p))
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -354,7 +426,12 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	set(&o.Description, form.Description)
 	set(&o.Severity, form.Severity)
 	set(&o.CVSSVectorString, form.CVSSVectorString)
-	set(&o.CveID, form.CveID)
+	if form.CveID.Set { // null clears the CVE, like on GitHub
+		o.CveID, changed = "", true
+		if form.CveID.Value != nil {
+			o.CveID = *form.CveID.Value
+		}
+	}
 	if form.CWEIDs != nil {
 		o.CWEIDs, changed = *form.CWEIDs, true
 	}
@@ -363,6 +440,12 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	}
 	if form.Credits != nil {
 		o.Credits, changed = *form.Credits, true
+	}
+	if form.Severity != nil {
+		if err := security.CheckSeverity(*form.Severity, o.CVSSVectorString); err != nil {
+			damastAPIError(ctx, err)
+			return
+		}
 	}
 	var in *security.Input
 	if changed {
@@ -373,9 +456,9 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	}
 	state := ""
 	if form.State != nil {
-		state = *form.State
-		if state == "" {
-			damastAPIError(ctx, &security.InputError{Key: "damast.security.error.state", Args: []any{a.State, state}})
+		state = strings.ToLower(strings.TrimSpace(*form.State))
+		if err := security.CheckState(state); err != nil { // "" too: for Patch, "" means unchanged
+			damastAPIError(ctx, err)
 			return
 		}
 	}
@@ -451,7 +534,8 @@ func DamastListAdvisoriesOSV(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 	repo := ctx.Repo().Repository
-	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	list, err := security.Visible(ctx, repo, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -494,6 +578,18 @@ func DamastListAdvisoryComments(ctx *context.APIContext) {
 	//   description: id of the advisory (DAMAST-...)
 	//   type: string
 	//   required: true
+	// - name: page
+	//   in: query
+	//   description: page number of results to return (1-based)
+	//   type: integer
+	// - name: per_page
+	//   in: query
+	//   description: page size of results (GitHub's name; limit works too)
+	//   type: integer
+	// - name: limit
+	//   in: query
+	//   description: page size of results
+	//   type: integer
 	// responses:
 	//   "200":
 	//     "$ref": "#/responses/DamastAdvisoryCommentList"
@@ -505,6 +601,7 @@ func DamastListAdvisoryComments(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 		return
 	}
+	comments = damastPage(ctx, comments)
 	ids := make([]int64, 0, len(comments))
 	for _, c := range comments {
 		ids = append(ids, c.PosterID)

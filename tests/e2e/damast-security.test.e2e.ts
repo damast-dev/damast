@@ -16,7 +16,10 @@ test('Security advisory: create a draft and publish it', async ({page, browser})
   const title = `E2E advisory ${dynamic_id()}`;
 
   await page.goto('/user2/repo1');
-  await page.locator('.overflow-menu-items a[href="/user2/repo1/security"]').click();
+  // on narrow screens the tab sits in the "..." overflow menu
+  const more = page.locator('.overflow-menu-button');
+  if (await more.isVisible()) await more.click();
+  await page.locator('a.item[href="/user2/repo1/security"]:visible').click();
   await expect(page).toHaveURL('/user2/repo1/security');
   await page.getByRole('link', {name: 'New draft advisory'}).click();
   await expect(page).toHaveURL('/user2/repo1/security/advisories/new');
@@ -54,4 +57,44 @@ test('Security advisory: create a draft and publish it', async ({page, browser})
   await expect(anonymous.locator('#damast-advisory-comments')).toHaveCount(0);
   await anonymous.goto(new URL('/user2/repo1/security', url).toString());
   await expect(anonymous.locator('#damast-security-advisories')).toContainText(title);
+});
+
+test('Security advisory: edit and delete a comment, withdraw after confirming', async ({page}) => {
+  const title = `E2E withdraw ${dynamic_id()}`;
+
+  await page.goto('/user2/repo1/security/advisories/new');
+  await page.fill('#damast-title', title);
+  await page.fill('textarea[name=description]', 'Wrong report.');
+  await page.click('#damast-advisory-submit');
+  await expect(page.locator('#damast-advisory-title')).toHaveText(title);
+
+  // comment, edit it, delete it (confirming)
+  await page.fill('#damast-advisory-comments .combo-markdown-editor textarea[name=content]', 'First version.');
+  await page.getByRole('button', {name: 'Comment'}).click();
+  const comment = page.locator('.damast-advisory-comment');
+  await expect(comment).toContainText('First version.');
+  await comment.locator('summary').click();
+  await comment.locator('textarea[name=content]').fill('Second version.');
+  await comment.getByRole('button', {name: 'Save'}).click();
+  await expect(comment.locator('.markup')).toHaveText('Second version.');
+
+  await comment.locator('summary').click();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await comment.getByRole('button', {name: 'Remove'}).click();
+  await expect(comment).toHaveCount(1); // dismissed: still there
+  page.once('dialog', (dialog) => dialog.accept());
+  await comment.getByRole('button', {name: 'Remove'}).click();
+  await expect(comment).toHaveCount(0);
+
+  await page.getByRole('button', {name: 'Publish advisory'}).click();
+  await expect(page.locator('.ui.green.label')).toHaveText('Published');
+
+  // withdrawing is final, so it asks first
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', {name: 'Withdraw advisory'}).click();
+  await expect(page.locator('.ui.green.label')).toHaveText('Published');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', {name: 'Withdraw advisory'}).click();
+  await expect(page.locator('#damast-advisory-withdrawn')).toBeVisible();
+  await expect(page.locator('#damast-advisory-actions')).toHaveCount(0);
 });

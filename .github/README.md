@@ -59,9 +59,11 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - **Security advisories.** Admins write drafts with severity, a CVSS 3.1 vector (the score is computed), CWE and CVE IDs, affected packages with vulnerable and patched versions, and credits. They discuss them in a private thread with the reporter and with people they add as collaborators, then publish or close them.
 - **OSV.** Published advisories are served as [OSV 1.6](https://ossf.github.io/osv-schema/) JSON, one by one and as a list per repository, so scanners can read them. Advisory IDs look like `DAMAST-7h2c-9xq4-m5vw`: random, so they never change when a repository is renamed or transferred, and they don't tell anyone how many private advisories exist.
 - **Private means private.** Until an advisory is published, only repository admins (including org owners and admin teams), site admins, the reporter and its collaborators can see it. Everyone else gets a `404`, on every page and API route. Drafts never show up in feeds, notifications, search, issue counters, webhooks or a reporter's profile, and mentioning someone in a draft doesn't notify them. The discussion stays private after publishing. In a private repository, even published advisories are only for people who can read it.
-- **API.** `/api/v1/repos/{owner}/{repo}/security-advisories` follows GitHub's REST API for repository advisories (list, create, update with `state` and `collaborating_users`, `/reports`), plus `/osv` and `/comments`. [`mast`](https://github.com/damast-dev/mast) has `mast security` and `mast advisory` commands for it.
+- **API.** `/api/v1/repos/{owner}/{repo}/security-advisories` follows GitHub's REST API for repository advisories (list with `state`, `page` and `per_page`, create, update with `state` and `collaborating_users`, `/reports`), with GitHub's response fields (`cwes`, `cvss_severities`, `credits_detailed`, `publisher`, `submission`), plus `/osv` and `/comments`. `/api/v1/repos/{owner}/{repo}/private-vulnerability-reporting` turns private reporting on (`PUT`) and off (`DELETE`), as on GitHub. [`mast`](https://github.com/damast-dev/mast) has `mast security` and `mast advisory` commands for it.
+- **Archived repositories** keep their advisories readable, but nobody can change them, comment on them or report new vulnerabilities.
+- **Two things to know.** Advisories describe code. If a repository's Code unit is turned off, only its admins see the Security tab, and nobody else sees its advisories, not even published ones. Pull mirrors have a Security tab like any other repository, but their code comes from somewhere else. Report vulnerabilities to the original project, and switch private reporting on only if you maintain the mirror's code.
 
-Not yet: file attachments in advisories, temporary private forks, requesting a CVE.
+Not yet: file attachments in advisories, temporary private forks, requesting a CVE, CVSS 4.0 vectors, checking CWE IDs against the CWE list (today any `CWE-<number>` is accepted and `cwes[].name` is empty), and taking advisories along when you migrate a repository from another instance.
 
 ### Its own name
 
@@ -150,7 +152,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - Co-authors in the contribution graph and on profiles, so pairing counts there too
 - An automated test on every Forgejo sync: switch a real instance to Damast and back, and check that Forgejo starts cleanly
 - [`mast`](https://github.com/damast-dev/mast) commands for Damast's features, starting with packages
-- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data
+- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data, credits the credited user accepts first (as on GitHub; today only users with a public profile can be credited), CVSS 4.0, CWE IDs checked against the CWE list (with names), advisories carried over when a repository is migrated from another instance
 
 **Your idea?** What do you miss from GitHub? [Open an issue](https://github.com/damast-dev/damast/issues/new) and tell us what your team trips over.
 

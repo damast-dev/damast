@@ -17,6 +17,7 @@ import (
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/log"
 )
 
 // Level is what a user may do with one advisory. Levels are ordered.
@@ -46,13 +47,20 @@ func AccessLevel(ctx context.Context, repo *repo_model.Repository, a *damast.Sec
 	if repo == nil || a == nil || perm == nil || a.RepoID != repo.ID {
 		return None, nil
 	}
+	if a.CreatedUnix < repo.CreatedUnix {
+		// older than its repository: left over from a deleted repository whose id was reused (deleted while the
+		// instance ran plain Forgejo, which does not know the damast_* tables). Never show it; clean it up.
+		log.Warn("security: deleting advisory %s of an earlier repository %d", a.AdvisoryID, repo.ID)
+		return None, damast.DeleteAdvisory(ctx, a.ID)
+	}
 	if IsAdmin(perm) {
 		return Admin, nil
 	}
 	if !CanReadRepo(perm) {
 		return None, nil // includes reporters and collaborators who lost access to the repository
 	}
-	if doer != nil && doer.ID > 0 { // not anonymous, ghost or the Actions user
+	// not anonymous, ghost or the Actions user; blocking by the owner ends the access like a collaboration
+	if doer != nil && doer.ID > 0 && !user_model.IsBlocked(ctx, repo.OwnerID, doer.ID) {
 		if a.ReporterID == doer.ID {
 			return Participant, nil
 		}

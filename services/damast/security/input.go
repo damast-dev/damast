@@ -179,6 +179,19 @@ func (in *Input) Normalize() error {
 	return nil
 }
 
+// CheckSeverity rejects an explicitly requested severity that a CVSS vector would silently override.
+func CheckSeverity(severity, vector string) error {
+	score, err := cvss.Score(strings.TrimSpace(vector))
+	if err != nil {
+		return nil // no or an invalid vector: Normalize decides
+	}
+	want := severityFromScore(score)
+	if s := strings.ToLower(strings.TrimSpace(severity)); s != want && !(s == "medium" && want == "moderate") {
+		return invalid("severity_cvss", want)
+	}
+	return nil
+}
+
 func severityFromScore(score float64) string {
 	switch s := cvss.Severity(score); s {
 	case "none":
