@@ -1393,6 +1393,7 @@ func registerRoutes(m *web.Route) {
 
 	// Grouping for those endpoints that do require authentication
 	m.Group("/{username}/{reponame}", func() {
+		m.Post("/pulls/{index}/damast/suggestions/apply", context.RepoMustNotBeArchived(), repo.DamastApplySuggestions) // DAMAST: review suggestions
 		if !setting.Repository.DisableForks {
 			m.Combo("/fork", reqRepoCodeReader).Get(repo.Fork).
 				Post(web.Bind(forms.CreateRepoForm{}), repo.ForkPost)

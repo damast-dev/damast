@@ -1,0 +1,71 @@
+/* Damast: review suggestions */
+/* the mini diff replaces the markdown code block of the suggestion */
+.render-content:has(~ .damast-suggestion-replaces) pre:has(> code.language-suggestion) {
+  display: none;
+}
+
+.damast-suggestion {
+  border: 1px solid var(--color-secondary);
+  border-radius: var(--border-radius);
+  margin-top: 0.5em;
+  overflow: hidden;
+}
+
+.damast-suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.25em 0.5em;
+  background: var(--color-box-header);
+  border-bottom: 1px solid var(--color-secondary);
+}
+
+.damast-suggestion-diff {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--fonts-monospace);
+  font-size: 12px;
+}
+
+.damast-suggestion-diff code {
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: none;
+  padding: 0;
+}
+
+.damast-suggestion-diff td {
+  padding: 0 0.5em;
+}
+
+.damast-suggestion-marker {
+  width: 1.5em;
+  user-select: none;
+}
+
+.damast-suggestion-del {
+  background: var(--color-diff-removed-row-bg);
+}
+
+.damast-suggestion-add {
+  background: var(--color-diff-added-row-bg);
+}
+
+.damast-suggestion-actions,
+.damast-suggestion-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  justify-content: flex-end;
+  padding: 0.5em;
+  border-top: 1px solid var(--color-secondary);
+}
+
+.damast-suggestion-form {
+  flex-direction: column;
+}
+
+.damast-suggestion-actions.tw-hidden,
+.damast-suggestion-form.tw-hidden {
+  display: none;
+}

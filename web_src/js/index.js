@@ -32,6 +32,7 @@ import {
   initRepoPullRequestReview,
   initArchivedLabelHandler,
 } from './features/repo-issue.js';
+import {initDamastSuggestions} from './features/damast-suggestions.js'; // DAMAST: review suggestions
 import {initRepoIssueSidebarList} from './features/repo-issue-sidebar-list.ts';
 import {initRepoEllipsisButton, initCommitStatuses, initCommitNotes} from './features/repo-commit.js';
 import {
@@ -169,6 +170,7 @@ onDomReady(() => {
   initRepoProject();
   initRepoPullRequestAllowMaintainerEdit();
   initRepoPullRequestReview();
+  initDamastSuggestions(); // DAMAST: review suggestions
   initRepoRelease();
   initRepoReleaseNew();
   initRepoSettingGitHook();

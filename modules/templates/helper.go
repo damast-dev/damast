@@ -32,6 +32,8 @@ func NewFuncMap() template.FuncMap {
 		"ctx": func() any { return nil }, // template context function
 		"DamastCoAuthors": DamastCoAuthors, // DAMAST: co-author trailers
 
+		"DamastSuggestion": DamastSuggestion, // DAMAST: review suggestions
+
 		"ExecuteTemplate": func(ctx context.Context, tmplName string, args any) template.HTML {
 			h := HTMLRenderer()
 			tmpl, err := h.TemplateLookup(tmplName, ctx)
