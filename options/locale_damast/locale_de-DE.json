@@ -89,6 +89,7 @@
 	"damast.security.error.patched": "Die korrigierte Version von %s muss eine einzelne Version sein, z. B. 1.4.2.",
 	"damast.security.error.credit_type": "Unbekannter Danksagungstyp „%s“.",
 	"damast.security.error.credit_user": "Unbekannter Benutzer „%s“ in den Danksagungen.",
+	"damast.security.error.credit_private": "%s hat kein öffentliches Profil und kann nicht genannt werden.",
 	"damast.security.error.unknown_user": "Unbekannter Benutzer „%s“.",
 	"damast.security.error.state": "Ein Hinweis im Zustand %s kann nicht %s werden.",
 	"damast.security.error.comment": "Ein Kommentar darf nicht leer sein und höchstens %d Bytes haben.",
