@@ -6,6 +6,7 @@ package user
 import (
 	"net/http"
 
+	damast_model "forgejo.org/models/damast"
 	"forgejo.org/modules/optional"
 	api "forgejo.org/modules/structs"
 	"forgejo.org/modules/web"
@@ -28,6 +29,7 @@ func GetUserSettings(ctx *context.APIContext) {
 	//     "$ref": "#/responses/unauthorized"
 	//   "403":
 	//     "$ref": "#/responses/forbidden"
+	damast_model.ApplyTheme(ctx, ctx.Doer()) // DAMAST: report the theme the web UI shows
 	ctx.JSON(http.StatusOK, convert.User2UserSettings(ctx.Doer()))
 }
 
@@ -71,6 +73,13 @@ func UpdateUserSettings(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 		return
 	}
+	if form.Theme != nil { // DAMAST: remember an explicit forgejo-auto, like the web settings
+		if err := damast_model.RecordThemeChoice(ctx, ctx.Doer().ID, *form.Theme); err != nil {
+			ctx.InternalServerError(err)
+			return
+		}
+	}
+	damast_model.ApplyTheme(ctx, ctx.Doer()) // DAMAST: report the theme the web UI shows
 
 	ctx.JSON(http.StatusOK, convert.User2UserSettings(ctx.Doer()))
 }

@@ -4,13 +4,18 @@
 package integration
 
 import (
+	"net/http"
 	"testing"
 
+	auth_model "forgejo.org/models/auth"
 	damast_model "forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
+	api "forgejo.org/modules/structs"
 	"forgejo.org/tests"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -61,6 +66,21 @@ func TestDamastThemeChoice(t *testing.T) {
 		testSelectedTheme(t, loginUser(t, "user4"), "forgejo-dark", "Forgejo dark", "")
 		damastStoreTheme(t, "user4", "forgejo-light-tritanopia")
 		testSelectedTheme(t, loginUser(t, "user4"), "forgejo-light-tritanopia", "forgejo-light-tritanopia", "")
+	})
+
+	t.Run("API reports and records the theme like the web UI", func(t *testing.T) {
+		damastStoreTheme(t, "user5", "forgejo-auto")
+		session := loginUser(t, "user5")
+		token := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWriteUser)
+		var settings api.UserSettings
+		DecodeJSON(t, MakeRequest(t, NewRequest(t, "GET", "/api/v1/user/settings").AddTokenAuth(token), http.StatusOK), &settings)
+		assert.Equal(t, "damast-auto", settings.Theme)
+
+		theme := "forgejo-auto"
+		req := NewRequestWithJSON(t, "PATCH", "/api/v1/user/settings", &api.UserSettingsOptions{Theme: &theme}).AddTokenAuth(token)
+		DecodeJSON(t, MakeRequest(t, req, http.StatusOK), &settings)
+		assert.Equal(t, "forgejo-auto", settings.Theme)
+		testSelectedTheme(t, session, "forgejo-auto", "Forgejo (follow system theme)", "")
 	})
 
 	t.Run("deleting the user deletes the choice", func(t *testing.T) {
