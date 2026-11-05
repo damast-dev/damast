@@ -13,7 +13,6 @@ import (
 	"forgejo.org/modules/damast/cvss"
 	api "forgejo.org/modules/structs"
 	"forgejo.org/modules/timeutil"
-	"forgejo.org/modules/util"
 	"forgejo.org/services/convert"
 )
 
@@ -223,7 +222,7 @@ func InputFromAPI(ctx context.Context, o *APICreateOption) (*Input, error) {
 		u, err := user_model.GetUserByName(ctx, c.Login)
 		if err != nil {
 			if user_model.IsErrUserNotExist(err) {
-				return nil, util.NewInvalidArgumentErrorf("Unknown user %q in credits.", c.Login)
+				return nil, invalid("credit_user", c.Login)
 			}
 			return nil, err
 		}

@@ -12,6 +12,7 @@ import (
 
 	"forgejo.org/models/damast"
 	"forgejo.org/modules/damast/cvss"
+	"forgejo.org/modules/translation"
 	"forgejo.org/modules/util"
 )
 
@@ -76,8 +77,19 @@ type Input struct {
 	Credits     []damast.Credit
 }
 
-func invalid(format string, args ...any) error {
-	return util.NewInvalidArgumentErrorf(format, args...)
+// InputError is a validation error. Key is a locale key (options/locale_damast) so the web UI can show it in
+// the user's language; Error() is English, for the API and logs.
+type InputError struct {
+	Key  string
+	Args []any
+}
+
+func (e *InputError) Error() string { return translation.NewLocale("en-US").TrString(e.Key, e.Args...) }
+
+func (e *InputError) Unwrap() error { return util.ErrInvalidArgument }
+
+func invalid(key string, args ...any) error {
+	return &InputError{Key: "damast.security.error." + key, Args: args}
 }
 
 // Normalize trims and validates the input in place. Errors wrap util.ErrInvalidArgument and are safe to show.
@@ -89,15 +101,15 @@ func (in *Input) Normalize() error {
 	in.Severity = strings.ToLower(strings.TrimSpace(in.Severity))
 
 	if in.Title == "" || utf8.RuneCountInString(in.Title) > maxTitle {
-		return invalid("Title is required and may have at most %d characters.", maxTitle)
+		return invalid("title", maxTitle)
 	}
 	if in.Description == "" || len(in.Description) > maxDescription {
-		return invalid("Description is required and may have at most %d bytes.", maxDescription)
+		return invalid("description", maxDescription)
 	}
 	if in.CVSSVector != "" {
 		score, err := cvss.Score(in.CVSSVector)
-		if err != nil {
-			return invalid("CVSS vector: %v.", err)
+		if err != nil { // the detail stays in English, the message says what a valid vector looks like
+			return invalid("cvss")
 		}
 		in.Severity = severityFromScore(score)
 	}
@@ -105,10 +117,10 @@ func (in *Input) Normalize() error {
 		in.Severity = "moderate"
 	}
 	if !slices.Contains(Severities, in.Severity) {
-		return invalid("Severity must be one of low, moderate, high or critical.")
+		return invalid("severity")
 	}
 	if in.CVEID != "" && !cveRe.MatchString(in.CVEID) {
-		return invalid("CVE id must look like CVE-2026-12345.")
+		return invalid("cve")
 	}
 
 	cwes := make([]string, 0, len(in.CWEIDs))
@@ -118,14 +130,14 @@ func (in *Input) Normalize() error {
 			continue
 		}
 		if !cweRe.MatchString(c) {
-			return invalid("CWE %q must look like CWE-79.", c)
+			return invalid("cwe", c)
 		}
 		cwes = append(cwes, c)
 	}
 	in.CWEIDs = cwes
 
 	if len(in.Affected) > maxList || len(in.CWEIDs) > maxList || len(in.Credits) > maxList {
-		return invalid("At most %d affected products, CWEs and credits each.", maxList)
+		return invalid("too_many", maxList)
 	}
 	for i := range in.Affected {
 		p := &in.Affected[i]
@@ -134,16 +146,16 @@ func (in *Input) Normalize() error {
 		p.VulnerableRange = strings.TrimSpace(p.VulnerableRange)
 		p.Patched = strings.TrimSpace(p.Patched)
 		if _, ok := Ecosystems[p.Ecosystem]; !ok {
-			return invalid("Unknown ecosystem %q.", p.Ecosystem)
+			return invalid("ecosystem", p.Ecosystem)
 		}
 		if p.Package == "" || len(p.Package) > maxTitle || !packageRe.MatchString(p.Package) {
-			return invalid("Package name %q is invalid.", p.Package)
+			return invalid("package", p.Package)
 		}
 		if _, err := ParseRange(p.VulnerableRange); err != nil {
-			return invalid("Vulnerable versions of %s: %v.", p.Package, err)
+			return invalid("range", p.Package)
 		}
 		if p.Patched != "" && !versionRe.MatchString(p.Patched) {
-			return invalid("Patched version of %s must be a single version like 1.4.2.", p.Package)
+			return invalid("patched", p.Package)
 		}
 	}
 
@@ -155,7 +167,7 @@ func (in *Input) Normalize() error {
 			c.Type = "finder"
 		}
 		if !slices.Contains(CreditTypes, c.Type) {
-			return invalid("Unknown credit type %q.", c.Type)
+			return invalid("credit_type", c.Type)
 		}
 		if c.UserID <= 0 || seen[c.UserID] {
 			continue

@@ -5,7 +5,6 @@ package security
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -16,7 +15,6 @@ import (
 	repo_model "forgejo.org/models/repo"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/timeutil"
-	"forgejo.org/modules/util"
 )
 
 // Report caps. A real reporter rarely has more than a couple of open reports per repository; the caps stop
@@ -28,7 +26,7 @@ const (
 )
 
 // ErrTooManyReports is returned when a reporter hits one of the caps.
-var ErrTooManyReports = errors.New("You have too many open vulnerability reports. Wait until the maintainers have handled them.")
+var ErrTooManyReports = &InputError{Key: "damast.security.error.too_many_reports"}
 
 func apply(a *damast.SecurityAdvisory, in *Input) {
 	a.Title = in.Title
@@ -115,7 +113,7 @@ func SetState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 		allowed = allowed || s == state
 	}
 	if !allowed {
-		return util.NewInvalidArgumentErrorf("An advisory in state %s cannot become %s.", a.State, state)
+		return invalid("state", a.State, state)
 	}
 	old := a.State
 	a.State = state
@@ -139,13 +137,13 @@ func SetState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 func stateMessage(old, state string) string {
 	switch {
 	case old == damast.AdvisoryTriage && state == damast.AdvisoryDraft:
-		return "accepted the report. It is now a draft advisory."
+		return "accepted"
 	case state == damast.AdvisoryPublished:
-		return "published the advisory."
+		return "published"
 	case state == damast.AdvisoryClosed:
-		return "closed the advisory."
+		return "closed"
 	default:
-		return "reopened the advisory as a draft."
+		return "reopened"
 	}
 }
 
@@ -153,13 +151,13 @@ func stateMessage(old, state string) string {
 func AddComment(ctx context.Context, repo *repo_model.Repository, doer *user_model.User, a *damast.SecurityAdvisory, content string) (*damast.AdvisoryComment, error) {
 	content = strings.TrimSpace(content)
 	if content == "" || len(content) > maxDescription {
-		return nil, util.NewInvalidArgumentErrorf("A comment must not be empty and may have at most %d bytes.", maxDescription)
+		return nil, invalid("comment", maxDescription)
 	}
 	c := &damast.AdvisoryComment{AdvisoryID: a.ID, PosterID: doer.ID, Content: content}
 	if err := damast.CreateAdvisoryComment(ctx, c); err != nil {
 		return nil, err
 	}
-	notifyParticipants(ctx, repo, a, doer, "commented:", content)
+	notifyParticipants(ctx, repo, a, doer, "commented", content)
 	return c, nil
 }
 
@@ -167,14 +165,14 @@ func AddComment(ctx context.Context, repo *repo_model.Repository, doer *user_mod
 // the admin should learn that now instead of the collaborator getting a 404 later.
 func checkCollaborator(ctx context.Context, repo *repo_model.Repository, u *user_model.User) error {
 	if u == nil || u.ID <= 0 || u.IsOrganization() || !u.IsActive || u.ProhibitLogin {
-		return util.NewInvalidArgumentErrorf("Only active users can be collaborators.")
+		return invalid("collaborator")
 	}
 	perm, err := access_model.GetUserRepoPermission(ctx, repo, u)
 	if err != nil {
 		return err
 	}
 	if !CanReadRepo(&perm) {
-		return util.NewInvalidArgumentErrorf("%s cannot read this repository's code. Give them read access first.", u.Name)
+		return invalid("collaborator_access", u.Name)
 	}
 	return nil
 }

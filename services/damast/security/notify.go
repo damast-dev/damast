@@ -16,6 +16,7 @@ import (
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/log"
 	"forgejo.org/modules/setting"
+	"forgejo.org/modules/translation"
 	"forgejo.org/services/mailer"
 )
 
@@ -26,10 +27,10 @@ import (
 
 var mailTemplate = template.Must(template.New("advisory").Parse(`<!DOCTYPE html>
 <html><body>
-<p><b>{{.Actor}}</b> {{.Action}}</p>
+<p>{{.Action}}</p>
 {{if .Body}}<pre style="white-space: pre-wrap; font-family: inherit">{{.Body}}</pre>{{end}}
 <p><a href="{{.Link}}">{{.ID}}: {{.Title}}</a></p>
-<p style="color: #666">You get this e-mail because you can see this private security advisory of {{.Repo}}. Do not forward it.</p>
+<p style="color: #666">{{.Footer}}</p>
 </body></html>`))
 
 // repoAdmins returns the users with admin access to the repository: owner, org owners, admin teams and admin
@@ -48,7 +49,8 @@ func repoAdmins(ctx context.Context, repo *repo_model.Repository) ([]*user_model
 	return user_model.GetUserByIDs(ctx, ids)
 }
 
-// send mails everyone in to who has at least the level, except the actor.
+// send mails everyone in to who has at least the level, except the actor. action is the last part of a
+// locale key (damast.security.mail.*) that gets the actor's name.
 func send(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityAdvisory, actor *user_model.User, to []*user_model.User, min Level, action, body string) {
 	if setting.MailService == nil {
 		return
@@ -68,10 +70,11 @@ func send(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityAd
 		if level < min {
 			continue
 		}
+		locale := translation.NewLocale(u.Language)
 		var buf bytes.Buffer
 		if err := mailTemplate.Execute(&buf, map[string]any{
-			"Actor": actor.Name, "Action": action, "Body": body, "Link": HTMLURL(repo, a),
-			"ID": a.AdvisoryID, "Title": a.Title, "Repo": repo.FullName(),
+			"Action": locale.TrString("damast.security.mail."+action, actor.Name), "Body": body, "Link": HTMLURL(repo, a),
+			"ID": a.AdvisoryID, "Title": a.Title, "Footer": locale.TrString("damast.security.mail.footer", repo.FullName()),
 		}); err != nil {
 			log.Error("security: mail template: %v", err)
 			return
@@ -91,7 +94,7 @@ func notifyNewReport(ctx context.Context, repo *repo_model.Repository, a *damast
 		log.Error("security: repo admins: %v", err)
 		return
 	}
-	send(ctx, repo, a, reporter, admins, Admin, "submitted a private vulnerability report.", "")
+	send(ctx, repo, a, reporter, admins, Admin, "new_report", "")
 }
 
 // notifyParticipants tells the reporter and collaborators. When the actor is not an admin (the reporter or a
@@ -122,7 +125,7 @@ func notifyParticipants(ctx context.Context, repo *repo_model.Repository, a *dam
 }
 
 func notifyAddedCollaborator(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityAdvisory, actor, u *user_model.User) {
-	send(ctx, repo, a, actor, []*user_model.User{u}, Participant, "added you as a collaborator on a private security advisory.", "")
+	send(ctx, repo, a, actor, []*user_model.User{u}, Participant, "added_collaborator", "")
 }
 
 // HTMLURL is the web page of an advisory.
