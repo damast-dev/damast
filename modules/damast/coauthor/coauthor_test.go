@@ -4,43 +4,43 @@
 package coauthor
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+// testdata/parse_vectors.json is shared with mast (src/damast/coauthors_vectors.json): keep both copies equal.
 func TestParse(t *testing.T) {
-	cases := []struct {
-		name, msg, author string
-		want              []Identity
-	}{
-		{"none", "fix: thing\n\nbody text", "a@x.org", nil},
-		{"subject only", "Co-authored-by: Bob <bob@x.org>", "a@x.org", nil},
-		{
-			"multiple, case-insensitive key, CRLF",
-			"feat: x\r\n\r\nbody\r\n\r\nCo-authored-by: Bob <bob@x.org>\r\nco-AUTHORED-by: Eve Doe <eve@x.org>\r\nSigned-off-by: A <a@x.org>",
-			"a@x.org",
-			[]Identity{{"Bob", "bob@x.org"}, {"Eve Doe", "eve@x.org"}},
-		},
-		{
-			"dedupe and drop author",
-			"feat\n\nCo-authored-by: Bob <bob@x.org>\nCo-authored-by: bob <BOB@x.org>\nCo-authored-by: Me <A@x.org>",
-			"a@x.org",
-			[]Identity{{"Bob", "bob@x.org"}},
-		},
-		{"broken lines skipped", "feat\n\nCo-authored-by: no email\nCo-authored-by:\nCo-authored-by: <only@x.org>", "", []Identity{{"only@x.org", "only@x.org"}}},
-		{
-			"git-valid names that RFC 5322 rejects",
-			"feat\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\nCo-authored-by: Doe, John <j@x.org>\nCo-authored-by: \"Quoted\" <q@x.org>",
-			"",
-			[]Identity{{"dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.com"}, {"Doe, John", "j@x.org"}, {"Quoted", "q@x.org"}},
-		},
-		{"invalid emails skipped", "feat\n\nCo-authored-by: A <a>\nCo-authored-by: B <@x.org>\nCo-authored-by: C <c@>\nCo-authored-by: D <d@x@y>\nCo-authored-by: E <e@x.org> trailing", "", nil},
-		{"not in last paragraph", "feat\n\nCo-authored-by: Bob <bob@x.org>\n\nmore text", "", nil},
+	data, err := os.ReadFile("testdata/parse_vectors.json")
+	require.NoError(t, err)
+	var cases []struct {
+		Name, Message, Author string
+		Want                  [][2]string
 	}
+	require.NoError(t, json.Unmarshal(data, &cases))
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			assert.Equal(t, c.want, Parse(c.msg, c.author))
+		t.Run(c.Name, func(t *testing.T) {
+			var want []Identity
+			for _, w := range c.Want {
+				want = append(want, Identity{w[0], w[1]})
+			}
+			assert.Equal(t, want, Parse(c.Message, c.Author))
 		})
 	}
+}
+
+func TestParseCap(t *testing.T) {
+	var msg strings.Builder
+	msg.WriteString("mob\n\n")
+	for i := range 1000 {
+		fmt.Fprintf(&msg, "Co-authored-by: N%d <n%d@x.org>\n", i, i)
+	}
+	got := Parse(msg.String(), "")
+	assert.Len(t, got, maxCoAuthors)
+	assert.Equal(t, Identity{"N99", "n99@x.org"}, got[99])
 }

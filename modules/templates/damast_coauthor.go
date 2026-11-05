@@ -5,6 +5,7 @@ package templates
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	user_model "forgejo.org/models/user"
@@ -48,20 +49,31 @@ func DamastCoAuthors(ctx context.Context, c *git.Commit) []DamastCoAuthor {
 	out := make([]DamastCoAuthor, 0, len(ids))
 	for _, id := range ids {
 		u := damastUserByEmail(ctx, id.Email)
+		if u != nil && !damastVisible(ctx, u, viewer) {
+			u = nil // hidden account: render like an unknown email, and don't merge its emails (that would link them)
+		}
 		if u != nil {
 			if seen[u.ID] {
 				continue
 			}
 			seen[u.ID] = true
-			if user_model.IsUserVisibleToViewer(ctx, u, viewer) {
-				id.Name = u.GetDisplayName() // the account's name, not whatever the trailer claims
-			} else {
-				u = nil // hidden account: render like an unknown email
-			}
+			id.Name = u.GetDisplayName() // the account's name, not whatever the trailer claims
 		}
 		out = append(out, DamastCoAuthor{Identity: id, User: u})
 	}
 	return out
+}
+
+// damastVisible caches IsUserVisibleToViewer per request: for private accounts it queries follows and teams.
+func damastVisible(ctx context.Context, u, viewer *user_model.User) bool {
+	var viewerID int64
+	if viewer != nil {
+		viewerID = viewer.ID
+	}
+	v, _ := cache.GetWithContextCache(ctx, "damast_coauthor_visible", fmt.Sprintf("%d:%d", viewerID, u.ID), func() (bool, error) {
+		return user_model.IsUserVisibleToViewer(ctx, u, viewer), nil
+	})
+	return v
 }
 
 // damastViewer is the signed-in user of a web request, nil for anonymous viewers and non-web renders.

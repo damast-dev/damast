@@ -6,6 +6,7 @@ package coauthor
 
 import (
 	"strings"
+	"unicode"
 )
 
 // Identity is a co-author as written in the trailer.
@@ -16,15 +17,21 @@ type Identity struct {
 
 const trailerKey = "co-authored-by:"
 
+// maxCoAuthors bounds the per-commit work (one user lookup per co-author) and the rendered HTML.
+const maxCoAuthors = 100
+
+// unsafeRune reports control and bidi override characters, which could reorder or hide text around a name.
+func unsafeRune(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) }
+
 // Parse returns the co-authors from the trailer block (last paragraph) of a
 // commit message, deduplicated by email and without authorEmail.
 func Parse(message, authorEmail string) []Identity {
 	message = strings.TrimSpace(strings.ReplaceAll(message, "\r\n", "\n"))
-	if i := strings.LastIndex(message, "\n\n"); i >= 0 {
-		message = message[i+2:]
-	} else if !strings.Contains(message, "\n") {
-		return nil // a single-line message is a subject, never a trailer block
+	i := strings.LastIndex(message, "\n\n")
+	if i < 0 {
+		return nil // the first paragraph is the subject, never a trailer block (as in git interpret-trailers)
 	}
+	message = message[i+2:]
 
 	seen := map[string]bool{strings.ToLower(strings.TrimSpace(authorEmail)): true}
 	var out []Identity
@@ -42,7 +49,7 @@ func Parse(message, authorEmail string) []Identity {
 		}
 		email := strings.TrimSpace(v[lt+1 : len(v)-1])
 		at := strings.Index(email, "@")
-		if at <= 0 || at != strings.LastIndex(email, "@") || at == len(email)-1 || strings.ContainsAny(email, "<> \t") {
+		if at <= 0 || at != strings.LastIndex(email, "@") || at == len(email)-1 || strings.ContainsAny(email, "<> ") || strings.IndexFunc(email, unsafeRune) >= 0 {
 			continue
 		}
 		key := strings.ToLower(email)
@@ -50,11 +57,19 @@ func Parse(message, authorEmail string) []Identity {
 			continue
 		}
 		seen[key] = true
-		name := strings.Trim(strings.TrimSpace(v[:lt]), `"`)
+		name := strings.Trim(strings.TrimSpace(strings.Map(func(r rune) rune {
+			if unsafeRune(r) {
+				return -1
+			}
+			return r
+		}, v[:lt])), `"`)
 		if name == "" {
 			name = email
 		}
 		out = append(out, Identity{Name: name, Email: email})
+		if len(out) == maxCoAuthors {
+			break
+		}
 	}
 	return out
 }

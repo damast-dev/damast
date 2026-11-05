@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"forgejo.org/models/db"
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
@@ -114,22 +115,25 @@ func TestDamastCoAuthors(t *testing.T) {
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/graph"), http.StatusOK).Body)
 		assert.Equal(t, 4, doc.doc.Find("#rev-list li").First().Find(".damast-coauthor").Length())
 
-		// accounts the viewer can't see (private user, private org) render like unknown emails
+		// accounts the viewer can't see (private user, private org) render like unknown emails;
+		// two emails of one hidden account stay two entries, or the page would reveal that they are linked
+		require.NoError(t, db.Insert(db.DefaultContext, &user_model.EmailAddress{UID: 31, Email: "secret2@example.org", LowerEmail: "secret2@example.org", IsActivated: true}))
 		resp, err = files_service.ChangeRepoFiles(git.DefaultContext, repo1, user2, &files_service.ChangeRepoFilesOptions{
 			Files:     []*files_service.ChangeRepoFile{{Operation: "create", TreePath: "damast-private.txt", ContentReader: strings.NewReader("x")}},
 			OldBranch: "master",
 			NewBranch: "damast-coauthor-private",
-			Message:   "private\n\nCo-authored-by: Secret <user31@noreply.example.org>\nCo-authored-by: Hidden Org <privated_org@noreply.example.org>\n",
+			Message:   "private\n\nCo-authored-by: Secret <user31@noreply.example.org>\nCo-authored-by: Hidden Org <privated_org@noreply.example.org>\nCo-authored-by: Secret Again <secret2@example.org>\n",
 		})
 		require.NoError(t, err)
 		privLink := "/user2/repo1/commit/" + resp.Commit.SHA
 		doc = NewHTMLParser(t, emptyTestSession(t).MakeRequest(t, NewRequest(t, "GET", privLink), http.StatusOK).Body)
-		assert.Equal(t, 2, doc.doc.Find(".commit-header-row .damast-coauthor").Length())
+		assert.Equal(t, 3, doc.doc.Find(".commit-header-row .damast-coauthor").Length())
 		assert.Equal(t, 0, doc.doc.Find(".commit-header-row a.damast-coauthor").Length())
 		assert.NotContains(t, doc.doc.Find(".commit-header-row .damast-author-names").Text(), "user31")
 		assert.NotContains(t, doc.doc.Find(".commit-header-row .damast-author-names").Text(), "privated_org")
 		doc = NewHTMLParser(t, loginUser(t, "user1").MakeRequest(t, NewRequest(t, "GET", privLink), http.StatusOK).Body) // admin sees them
 		assert.Equal(t, 2, doc.doc.Find(".commit-header-row a.damast-coauthor").Length())
+		assert.Equal(t, 2, doc.doc.Find(".commit-header-row .damast-coauthor").Length()) // user31's two emails: one person
 
 		// commits without trailer render no co-authors
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/65f1bf27bc3bf70f64657658635e66094edbcb4d"), http.StatusOK).Body)
