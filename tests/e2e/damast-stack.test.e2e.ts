@@ -50,17 +50,22 @@ test('Stack map, rebase stack and merge up to here', async ({page}) => {
   }
 
   // Rebase stack: every layer onto its parent, the bottom one onto main
-  await page.locator('#damast-stack-rebase').click();
-  await expect(page.locator('.flash-success')).toContainText('Rebased #1, #2, #3, #4.');
+  await page.locator('#damast-stack-rebase').click({timeout: 60000});
+  await expect(page.locator('.flash-success')).toContainText('Rebased #1, #2, #3, #4.', {timeout: 60000}); // one temporary clone per layer
 
   // Merge up to here: #1, #2 and #3, after a confirmation
+  await page.goto('/user2/stacked-prs/pulls/3'); // waits for the scripts that bind the confirmation
   await page.locator('#damast-stack-merge').click();
   const modal = page.locator('#damast-stack-merge-modal');
   await expect(modal).toBeVisible();
   await expect(modal).toContainText('#1, #2, #3');
-  if (shots) await page.screenshot({path: `${shots}/stack-merge-modal.png`});
-  await modal.locator('.ok.button').click();
-  await expect(page.locator('.flash-success')).toContainText('Merged #1, #2, #3.');
+  if (shots) {
+    await expect(modal).toHaveCSS('opacity', '1'); // let the modal finish its transition
+    await expect(page.locator('.ui.dimmer.active')).toHaveCSS('opacity', '1');
+    await page.screenshot({path: `${shots}/stack-merge-modal.png`});
+  }
+  await modal.locator('.ok.button').click({timeout: 60000});
+  await expect(page.locator('.flash-success')).toContainText('Merged #1, #2, #3.', {timeout: 60000});
   await expect(page.locator('.issue-state-label')).toContainText('Merged');
 
   // the draft layer was retargeted onto main and is on its own now
