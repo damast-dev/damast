@@ -17,11 +17,13 @@ import (
 const OSVSchemaVersion = "1.6.0"
 
 // OSV is an advisory in the Open Source Vulnerability format.
+// swagger:model DamastOSV
 type OSV struct {
 	SchemaVersion    string         `json:"schema_version"`
 	ID               string         `json:"id"`
 	Modified         string         `json:"modified"`
 	Published        string         `json:"published,omitempty"`
+	Withdrawn        string         `json:"withdrawn,omitempty"`
 	Aliases          []string       `json:"aliases,omitempty"`
 	Summary          string         `json:"summary,omitempty"`
 	Details          string         `json:"details,omitempty"`
@@ -32,27 +34,37 @@ type OSV struct {
 	DatabaseSpecific map[string]any `json:"database_specific"`
 }
 
+// OSVSeverity is part of the security advisories API.
+// swagger:model DamastOSVSeverity
 type OSVSeverity struct {
 	Type  string `json:"type"`
 	Score string `json:"score"`
 }
 
+// OSVPackage is part of the security advisories API.
+// swagger:model DamastOSVPackage
 type OSVPackage struct {
 	Ecosystem string `json:"ecosystem"`
 	Name      string `json:"name"`
 }
 
+// OSVEvent is part of the security advisories API.
+// swagger:model DamastOSVEvent
 type OSVEvent struct {
 	Introduced   string `json:"introduced,omitempty"`
 	Fixed        string `json:"fixed,omitempty"`
 	LastAffected string `json:"last_affected,omitempty"`
 }
 
+// OSVRange is part of the security advisories API.
+// swagger:model DamastOSVRange
 type OSVRange struct {
 	Type   string     `json:"type"`
 	Events []OSVEvent `json:"events"`
 }
 
+// OSVAffected is part of the security advisories API.
+// swagger:model DamastOSVAffected
 type OSVAffected struct {
 	Package          OSVPackage     `json:"package"`
 	Ranges           []OSVRange     `json:"ranges,omitempty"`
@@ -60,11 +72,15 @@ type OSVAffected struct {
 	DatabaseSpecific map[string]any `json:"database_specific,omitempty"`
 }
 
+// OSVReference is part of the security advisories API.
+// swagger:model DamastOSVReference
 type OSVReference struct {
 	Type string `json:"type"`
 	URL  string `json:"url"`
 }
 
+// OSVCredit is part of the security advisories API.
+// swagger:model DamastOSVCredit
 type OSVCredit struct {
 	Name    string   `json:"name"`
 	Contact []string `json:"contact,omitempty"`
@@ -80,7 +96,7 @@ func ToOSV(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	o := &OSV{
 		SchemaVersion: OSVSchemaVersion,
 		ID:            a.AdvisoryID,
-		Modified:      osvTime(max(a.UpdatedUnix, a.PublishedUnix)),
+		Modified:      osvTime(max(a.UpdatedUnix, a.PublishedUnix, a.WithdrawnUnix)),
 		Summary:       a.Title,
 		Details:       a.Description,
 		References: []OSVReference{
@@ -95,6 +111,9 @@ func ToOSV(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	}
 	if a.PublishedUnix > 0 {
 		o.Published = osvTime(a.PublishedUnix)
+	}
+	if a.WithdrawnUnix > 0 {
+		o.Withdrawn = osvTime(a.WithdrawnUnix)
 	}
 	if a.CVEID != "" {
 		o.Aliases = []string{a.CVEID}

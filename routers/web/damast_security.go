@@ -23,6 +23,10 @@ func registerDamastSecurityRoutes(m *web.Route) {
 			m.Combo("/edit", repo.DamastAdvisoryReq(security.Admin)).Get(repo.DamastAdvisoryEdit).Post(repo.DamastAdvisoryEditPost)
 			m.Post("/state", repo.DamastAdvisoryReq(security.Admin), repo.DamastAdvisoryStatePost)
 			m.Post("/comments", repo.DamastAdvisoryReq(security.Participant), repo.DamastAdvisoryCommentPost)
+			m.Group("/comments/{comment_id}", func() {
+				m.Post("/edit", repo.DamastAdvisoryCommentEditPost)
+				m.Post("/delete", repo.DamastAdvisoryCommentDeletePost)
+			}, repo.DamastAdvisoryReq(security.Participant), repo.DamastAdvisoryCommentAssignment)
 			m.Post("/collaborators", repo.DamastAdvisoryReq(security.Admin), repo.DamastAdvisoryCollaboratorPost)
 			m.Post("/collaborators/remove", repo.DamastAdvisoryReq(security.Admin), repo.DamastAdvisoryCollaboratorRemovePost)
 		}, repo.DamastAdvisoryAssignment)

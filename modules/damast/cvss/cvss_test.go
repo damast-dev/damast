@@ -35,7 +35,7 @@ func TestScore(t *testing.T) {
 func TestScoreInvalid(t *testing.T) {
 	for _, vector := range []string{
 		"",
-		"AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",           // no prefix
+		"AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", // no prefix
 		"CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",  // only 3.1
 		"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H",      // missing A
 		"CVSS:3.1/AV:X/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",  // bad value

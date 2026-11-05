@@ -18,33 +18,44 @@ import (
 
 // API types follow GitHub's REST API for repository security advisories where it makes sense.
 
+// APIPackage is part of the security advisories API.
+// swagger:model DamastAdvisoryPackage
 type APIPackage struct {
 	Ecosystem string `json:"ecosystem"`
 	Name      string `json:"name"`
 }
 
+// APIVulnerability is part of the security advisories API.
+// swagger:model DamastAdvisoryVulnerability
 type APIVulnerability struct {
 	Package                APIPackage `json:"package"`
 	VulnerableVersionRange string     `json:"vulnerable_version_range"`
 	PatchedVersions        string     `json:"patched_versions"`
 }
 
+// APICVSS is part of the security advisories API.
+// swagger:model DamastAdvisoryCVSS
 type APICVSS struct {
 	VectorString string  `json:"vector_string"`
 	Score        float64 `json:"score"`
 }
 
+// APIIdentifier is part of the security advisories API.
+// swagger:model DamastAdvisoryIdentifier
 type APIIdentifier struct {
 	Type  string `json:"type"`
 	Value string `json:"value"`
 }
 
+// APICredit is part of the security advisories API.
+// swagger:model DamastAdvisoryCredit
 type APICredit struct {
 	Login string `json:"login"`
 	Type  string `json:"type"`
 }
 
 // APIAdvisory is a repository security advisory.
+// swagger:model DamastSecurityAdvisory
 type APIAdvisory struct {
 	GhsaID          string             `json:"ghsa_id"` // GitHub's field name; holds the DAMAST-... id
 	CveID           *string            `json:"cve_id"`
@@ -60,6 +71,7 @@ type APIAdvisory struct {
 	UpdatedAt       time.Time          `json:"updated_at"`
 	PublishedAt     *time.Time         `json:"published_at"`
 	ClosedAt        *time.Time         `json:"closed_at"`
+	WithdrawnAt     *time.Time         `json:"withdrawn_at"`
 	Vulnerabilities []APIVulnerability `json:"vulnerabilities"`
 	CVSS            *APICVSS           `json:"cvss"`
 	CWEIDs          []string           `json:"cwe_ids"`
@@ -70,6 +82,7 @@ type APIAdvisory struct {
 }
 
 // APIVulnerabilityOption is one affected product in a create or update request.
+// swagger:model DamastAdvisoryVulnerabilityOption
 type APIVulnerabilityOption struct {
 	Package                APIPackage `json:"package"`
 	VulnerableVersionRange string     `json:"vulnerable_version_range"`
@@ -77,6 +90,7 @@ type APIVulnerabilityOption struct {
 }
 
 // APIReportOption is the body of POST /security-advisories/reports.
+// swagger:model DamastAdvisoryReportOption
 type APIReportOption struct {
 	Summary          string                   `json:"summary"`
 	Description      string                   `json:"description"`
@@ -87,6 +101,7 @@ type APIReportOption struct {
 }
 
 // APICreateOption is the body of POST /security-advisories.
+// swagger:model DamastAdvisoryCreateOption
 type APICreateOption struct {
 	APIReportOption
 	CveID   string      `json:"cve_id"`
@@ -94,6 +109,7 @@ type APICreateOption struct {
 }
 
 // APIUpdateOption is the body of PATCH /security-advisories/{id}. Missing fields stay unchanged.
+// swagger:model DamastAdvisoryUpdateOption
 type APIUpdateOption struct {
 	Summary            *string                   `json:"summary"`
 	Description        *string                   `json:"description"`
@@ -108,6 +124,7 @@ type APIUpdateOption struct {
 }
 
 // APIComment is a comment of the private discussion.
+// swagger:model DamastAdvisoryComment
 type APIComment struct {
 	ID        int64     `json:"id"`
 	Body      string    `json:"body"`
@@ -116,6 +133,7 @@ type APIComment struct {
 }
 
 // APICommentOption is the body of POST .../comments.
+// swagger:model DamastAdvisoryCommentOption
 type APICommentOption struct {
 	Body string `json:"body"`
 }
@@ -151,6 +169,7 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 		UpdatedAt:   a.UpdatedUnix.AsTime(),
 		PublishedAt: apiTime(a.PublishedUnix),
 		ClosedAt:    apiTime(a.ClosedUnix),
+		WithdrawnAt: apiTime(a.WithdrawnUnix),
 		CWEIDs:      append([]string{}, a.CWEIDs...),
 		Credits:     []APICredit{},
 	}

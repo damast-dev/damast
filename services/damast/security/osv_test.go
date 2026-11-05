@@ -108,6 +108,15 @@ func TestToOSV(t *testing.T) {
 	assert.NotContains(t, m, "aliases")
 	assert.NotContains(t, m, "severity")
 	assert.NotContains(t, m, "affected")
+	assert.NotContains(t, m, "withdrawn")
+
+	withdrawn := *minimal
+	withdrawn.State, withdrawn.WithdrawnUnix, withdrawn.UpdatedUnix = damast.AdvisoryWithdrawn, 1700000900, 1700000900
+	o, err = ToOSV(context.Background(), repo, &withdrawn)
+	require.NoError(t, err)
+	m = validateOSV(t, schema, o)
+	assert.Equal(t, "2023-11-14T22:28:20Z", m["withdrawn"])
+	assert.Equal(t, m["withdrawn"], m["modified"])
 
 	// every ecosystem we offer must be valid OSV
 	for key := range Ecosystems {
@@ -168,16 +177,20 @@ func TestInputNormalize(t *testing.T) {
 	assert.Equal(t, []damast.Credit{{UserID: 2, Type: "finder"}}, in.Credits)
 
 	for name, mutate := range map[string]func(*Input){
-		"no title":        func(in *Input) { in.Title = " " },
-		"no description":  func(in *Input) { in.Description = "" },
-		"bad severity":    func(in *Input) { in.Severity = "urgent" },
-		"bad cvss":        func(in *Input) { in.CVSSVector = "CVSS:3.1/AV:N" },
-		"bad cve":         func(in *Input) { in.CVEID = "CVE-1" },
-		"bad cwe":         func(in *Input) { in.CWEIDs = []string{"79"} },
-		"bad ecosystem":   func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "other", Package: "p"}} },
-		"no package":      func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "npm"}} },
-		"bad range":       func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "npm", Package: "p", VulnerableRange: "> 1"}} },
-		"bad patched":     func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "npm", Package: "p", Patched: "1, 2"}} },
+		"no title":       func(in *Input) { in.Title = " " },
+		"no description": func(in *Input) { in.Description = "" },
+		"bad severity":   func(in *Input) { in.Severity = "urgent" },
+		"bad cvss":       func(in *Input) { in.CVSSVector = "CVSS:3.1/AV:N" },
+		"bad cve":        func(in *Input) { in.CVEID = "CVE-1" },
+		"bad cwe":        func(in *Input) { in.CWEIDs = []string{"79"} },
+		"bad ecosystem":  func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "other", Package: "p"}} },
+		"no package":     func(in *Input) { in.Affected = []damast.AffectedProduct{{Ecosystem: "npm"}} },
+		"bad range": func(in *Input) {
+			in.Affected = []damast.AffectedProduct{{Ecosystem: "npm", Package: "p", VulnerableRange: "> 1"}}
+		},
+		"bad patched": func(in *Input) {
+			in.Affected = []damast.AffectedProduct{{Ecosystem: "npm", Package: "p", Patched: "1, 2"}}
+		},
 		"bad credit type": func(in *Input) { in.Credits = []damast.Credit{{UserID: 1, Type: "hero"}} },
 	} {
 		in := valid()

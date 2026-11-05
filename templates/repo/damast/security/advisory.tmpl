@@ -18,6 +18,9 @@
 			{{if and $a.IsPublished (gt $a.UpdatedUnix $a.PublishedUnix)}} · {{ctx.Locale.Tr "damast.security.modified_at" (DateUtils.TimeSince $a.UpdatedUnix)}}{{end}}
 		</div>
 
+		{{if $a.WithdrawnUnix}}
+			<div class="ui error message" id="damast-advisory-withdrawn">{{svg "octicon-circle-slash"}} {{ctx.Locale.Tr "damast.security.withdrawn_notice" (DateUtils.TimeSince $a.WithdrawnUnix)}}</div>
+		{{end}}
 		{{if not $a.IsPublished}}
 			<div class="ui warning message" id="damast-advisory-private">{{svg "octicon-lock"}} {{ctx.Locale.Tr "damast.security.private_notice"}}</div>
 		{{end}}
@@ -59,6 +62,18 @@
 									<span class="text grey">{{DateUtils.TimeSince .Comment.CreatedUnix}}</span>
 								</div>
 								<div class="markup">{{.Rendered}}</div>
+								{{if .CanEdit}}
+									<details class="tw-mt-2 damast-advisory-comment-edit">
+										<summary class="text grey">{{ctx.Locale.Tr "edit"}}</summary>
+										<form class="ui form tw-mt-2" action="{{$link}}/comments/{{.Comment.ID}}/edit" method="post">
+											<textarea name="content" rows="4" aria-label="{{ctx.Locale.Tr "edit"}}">{{.Comment.Content}}</textarea>
+											<button class="ui primary small button tw-mt-2">{{ctx.Locale.Tr "save"}}</button>
+										</form>
+										<form class="tw-mt-2" action="{{$link}}/comments/{{.Comment.ID}}/delete" method="post" data-damast-confirm="{{ctx.Locale.Tr "damast.security.comment_delete_confirm"}}">
+											<button class="ui red basic small button">{{ctx.Locale.Tr "remove"}}</button>
+										</form>
+									</details>
+								{{end}}
 							</div>
 						{{end}}
 						<form class="ui form" action="{{$link}}/comments" method="post">
@@ -86,9 +101,12 @@
 								<button class="ui basic red fluid button" name="state" value="closed">{{ctx.Locale.Tr "damast.security.action.close"}}</button>
 							{{else if eq $a.State "closed"}}
 								<button class="ui basic fluid button" name="state" value="draft">{{ctx.Locale.Tr "damast.security.action.reopen"}}</button>
+							{{else if eq $a.State "published"}}
+								<button class="ui basic red fluid button" name="state" value="withdrawn">{{ctx.Locale.Tr "damast.security.action.withdraw"}}</button>
 							{{end}}
 						</form>
 						{{if eq $a.State "draft"}}<p class="help tw-mt-2">{{ctx.Locale.Tr "damast.security.publish_help"}}</p>{{end}}
+						{{if eq $a.State "published"}}<p class="help tw-mt-2">{{ctx.Locale.Tr "damast.security.withdraw_help"}}</p>{{end}}
 					</div>
 				{{end}}
 

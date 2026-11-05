@@ -18,7 +18,6 @@ import (
 // REST API for repository security advisories, shaped like GitHub's
 // (https://docs.github.com/en/rest/security-advisories/repository-advisories). Every denial is a 404, also for
 // anonymous users and for write requests, so the API never tells an unpublished advisory from a missing one.
-// Not in the swagger spec: that file is generated from upstream code and would conflict on every sync.
 
 func damastAPIError(ctx *context.APIContext, err error) {
 	var inputErr *security.InputError
@@ -93,6 +92,31 @@ func damastRespond(ctx *context.APIContext, status int, a *damast.SecurityAdviso
 
 // DamastListAdvisories lists the advisories the doer may see. ?state= filters by state.
 func DamastListAdvisories(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/security-advisories repository repoListSecurityAdvisories
+	// ---
+	// summary: List the repository's security advisories the user may see
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: state
+	//   in: query
+	//   description: only advisories in this state (triage, draft, published, closed, withdrawn)
+	//   type: string
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastSecurityAdvisoryList"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	repo := ctx.Repo().Repository
 	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
 	if err != nil {
@@ -122,6 +146,36 @@ func DamastListAdvisories(ctx *context.APIContext) {
 
 // DamastCreateAdvisory creates a draft advisory (repository admins).
 func DamastCreateAdvisory(ctx *context.APIContext) {
+	// swagger:operation POST /repos/{owner}/{repo}/security-advisories repository repoCreateSecurityAdvisory
+	// ---
+	// summary: Create a draft security advisory (repository admins)
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastAdvisoryCreateOption"
+	// responses:
+	//   "201":
+	//     "$ref": "#/responses/DamastSecurityAdvisory"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	in, err := security.InputFromAPI(ctx, web.GetForm(ctx).(*security.APICreateOption))
 	if err != nil {
 		damastAPIError(ctx, err)
@@ -149,6 +203,38 @@ func DamastAdvisoryReqReporter(ctx *context.APIContext) {
 
 // DamastReportVulnerability submits a private vulnerability report.
 func DamastReportVulnerability(ctx *context.APIContext) {
+	// swagger:operation POST /repos/{owner}/{repo}/security-advisories/reports repository repoReportVulnerability
+	// ---
+	// summary: Report a vulnerability privately (needs private vulnerability reporting)
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastAdvisoryReportOption"
+	// responses:
+	//   "201":
+	//     "$ref": "#/responses/DamastSecurityAdvisory"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
+	//   "429":
+	//     "$ref": "#/responses/error"
 	repo := ctx.Repo().Repository
 	form := web.GetForm(ctx).(*security.APIReportOption)
 	in, err := security.InputFromAPI(ctx, &security.APICreateOption{APIReportOption: *form})
@@ -166,12 +252,73 @@ func DamastReportVulnerability(ctx *context.APIContext) {
 
 // DamastGetAdvisory returns one advisory.
 func DamastGetAdvisory(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/security-advisories/{ghsa_id} repository repoGetSecurityAdvisory
+	// ---
+	// summary: Get a security advisory
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastSecurityAdvisory"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	a, level := damastAPIAdvisory(ctx)
 	damastRespond(ctx, http.StatusOK, a, level)
 }
 
 // DamastUpdateAdvisory edits an advisory, changes its state or its collaborators (repository admins).
 func DamastUpdateAdvisory(ctx *context.APIContext) {
+	// swagger:operation PATCH /repos/{owner}/{repo}/security-advisories/{ghsa_id} repository repoEditSecurityAdvisory
+	// ---
+	// summary: Edit a security advisory, its collaborators or its state, all or nothing (repository admins)
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastAdvisoryUpdateOption"
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastSecurityAdvisory"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	repo := ctx.Repo().Repository
 	a, level := damastAPIAdvisory(ctx)
 	form := web.GetForm(ctx).(*security.APIUpdateOption)
@@ -198,7 +345,7 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 		return
 	}
 	changed := false
-	set := func(dst *string, src *string) {
+	set := func(dst, src *string) {
 		if src != nil {
 			*dst, changed = *src, true
 		}
@@ -217,33 +364,56 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	if form.Credits != nil {
 		o.Credits, changed = *form.Credits, true
 	}
+	var in *security.Input
 	if changed {
-		in, err := security.InputFromAPI(ctx, o)
-		if err == nil {
-			err = security.Update(ctx, a, in)
-		}
-		if err != nil {
+		if in, err = security.InputFromAPI(ctx, o); err != nil {
 			damastAPIError(ctx, err)
 			return
 		}
 	}
-	if collaborators != nil {
-		if err := security.SetCollaborators(ctx, repo, ctx.Doer(), a, collaborators); err != nil {
-			damastAPIError(ctx, err)
-			return
-		}
-	}
+	state := ""
 	if form.State != nil {
-		if err := security.SetState(ctx, repo, ctx.Doer(), a, *form.State); err != nil {
-			damastAPIError(ctx, err)
+		state = *form.State
+		if state == "" {
+			damastAPIError(ctx, &security.InputError{Key: "damast.security.error.state", Args: []any{a.State, state}})
 			return
 		}
+	}
+	if err := security.Patch(ctx, repo, ctx.Doer(), a, in, collaborators, state); err != nil {
+		damastAPIError(ctx, err)
+		return
 	}
 	damastRespond(ctx, http.StatusOK, a, level)
 }
 
 // DamastAdvisoryOSV returns a published advisory as OSV JSON. Unpublished advisories have no OSV document.
 func DamastAdvisoryOSV(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/security-advisories/{ghsa_id}/osv repository repoGetSecurityAdvisoryOSV
+	// ---
+	// summary: Get a published or withdrawn security advisory in OSV format
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastOSV"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	a, _ := damastAPIAdvisory(ctx)
 	if !a.IsPublished() {
 		ctx.NotFound()
@@ -259,6 +429,27 @@ func DamastAdvisoryOSV(ctx *context.APIContext) {
 
 // DamastListAdvisoriesOSV returns all published advisories of the repository as a JSON array of OSV documents.
 func DamastListAdvisoriesOSV(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/security-advisories/osv repository repoListSecurityAdvisoriesOSV
+	// ---
+	// summary: List the repository's published and withdrawn security advisories in OSV format
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastOSVList"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	repo := ctx.Repo().Repository
 	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
 	if err != nil {
@@ -282,6 +473,32 @@ func DamastListAdvisoriesOSV(ctx *context.APIContext) {
 
 // DamastListAdvisoryComments lists the private discussion.
 func DamastListAdvisoryComments(ctx *context.APIContext) {
+	// swagger:operation GET /repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments repository repoListSecurityAdvisoryComments
+	// ---
+	// summary: List the private discussion of a security advisory
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastAdvisoryCommentList"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
 	a, _ := damastAPIAdvisory(ctx)
 	comments, err := damast.AdvisoryComments(ctx, a.ID)
 	if err != nil {
@@ -306,6 +523,41 @@ func DamastListAdvisoryComments(ctx *context.APIContext) {
 
 // DamastCreateAdvisoryComment adds a comment to the private discussion.
 func DamastCreateAdvisoryComment(ctx *context.APIContext) {
+	// swagger:operation POST /repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments repository repoCreateSecurityAdvisoryComment
+	// ---
+	// summary: Comment in the private discussion of a security advisory
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastAdvisoryCommentOption"
+	// responses:
+	//   "201":
+	//     "$ref": "#/responses/DamastAdvisoryComment"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	a, _ := damastAPIAdvisory(ctx)
 	form := web.GetForm(ctx).(*security.APICommentOption)
 	c, err := security.AddComment(ctx, ctx.Repo().Repository, ctx.Doer(), a, form.Body)
@@ -314,4 +566,117 @@ func DamastCreateAdvisoryComment(ctx *context.APIContext) {
 		return
 	}
 	ctx.JSON(http.StatusCreated, security.ToAPIComment(ctx, c, ctx.Doer(), ctx.Doer()))
+}
+
+// DamastAdvisoryCommentAssignment loads a comment of the loaded advisory that the doer may edit (its poster
+// or an admin), or answers 404.
+func DamastAdvisoryCommentAssignment(ctx *context.APIContext) {
+	a, level := damastAPIAdvisory(ctx)
+	c, err := damast.GetAdvisoryComment(ctx, a.ID, ctx.ParamsInt64("comment_id"))
+	if errors.Is(err, util.ErrNotExist) || (err == nil && !security.CanEditComment(c, ctx.Doer(), level)) {
+		ctx.NotFound()
+		return
+	} else if err != nil {
+		ctx.InternalServerError(err)
+		return
+	}
+	ctx.Data["DamastComment"] = c
+}
+
+// DamastEditAdvisoryComment edits a comment of the private discussion.
+func DamastEditAdvisoryComment(ctx *context.APIContext) {
+	// swagger:operation PATCH /repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments/{comment_id} repository repoEditSecurityAdvisoryComment
+	// ---
+	// summary: Edit a comment of the private discussion (its author or a repository admin)
+	// produces:
+	// - application/json
+	// consumes:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// - name: comment_id
+	//   in: path
+	//   description: id of the comment
+	//   type: integer
+	//   format: int64
+	//   required: true
+	// - name: body
+	//   in: body
+	//   required: true
+	//   schema:
+	//     "$ref": "#/definitions/DamastAdvisoryCommentOption"
+	// responses:
+	//   "200":
+	//     "$ref": "#/responses/DamastAdvisoryComment"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
+	c := ctx.Data["DamastComment"].(*damast.AdvisoryComment)
+	form := web.GetForm(ctx).(*security.APICommentOption)
+	if err := security.EditComment(ctx, c, form.Body); err != nil {
+		damastAPIError(ctx, err)
+		return
+	}
+	users, err := security.LoadUsers(ctx, c.PosterID)
+	if err != nil {
+		ctx.InternalServerError(err)
+		return
+	}
+	ctx.JSON(http.StatusOK, security.ToAPIComment(ctx, c, users[c.PosterID], ctx.Doer()))
+}
+
+// DamastDeleteAdvisoryComment deletes a comment of the private discussion.
+func DamastDeleteAdvisoryComment(ctx *context.APIContext) {
+	// swagger:operation DELETE /repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments/{comment_id} repository repoDeleteSecurityAdvisoryComment
+	// ---
+	// summary: Delete a comment of the private discussion (its author or a repository admin)
+	// produces:
+	// - application/json
+	// parameters:
+	// - name: owner
+	//   in: path
+	//   description: owner of the repo
+	//   type: string
+	//   required: true
+	// - name: repo
+	//   in: path
+	//   description: name of the repo
+	//   type: string
+	//   required: true
+	// - name: ghsa_id
+	//   in: path
+	//   description: id of the advisory (DAMAST-...)
+	//   type: string
+	//   required: true
+	// - name: comment_id
+	//   in: path
+	//   description: id of the comment
+	//   type: integer
+	//   format: int64
+	//   required: true
+	// responses:
+	//   "204":
+	//     "$ref": "#/responses/empty"
+	//   "404":
+	//     "$ref": "#/responses/notFound"
+	if err := security.DeleteComment(ctx, ctx.Data["DamastComment"].(*damast.AdvisoryComment)); err != nil {
+		ctx.InternalServerError(err)
+		return
+	}
+	ctx.Status(http.StatusNoContent)
 }

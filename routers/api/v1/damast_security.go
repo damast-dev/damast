@@ -25,6 +25,10 @@ func damastSecurityAdvisoryRoutes(m *web.Route) {
 			m.Get("/osv", repo.DamastAdvisoryOSV)
 			m.Get("/comments", repo.DamastAdvisoryReq(security.Participant), repo.DamastListAdvisoryComments)
 			m.Post("/comments", repo.DamastAdvisoryReq(security.Participant), bind(security.APICommentOption{}), repo.DamastCreateAdvisoryComment)
+			m.Group("/comments/{comment_id}", func() {
+				m.Patch("", bind(security.APICommentOption{}), repo.DamastEditAdvisoryComment)
+				m.Delete("", repo.DamastDeleteAdvisoryComment)
+			}, repo.DamastAdvisoryReq(security.Participant), repo.DamastAdvisoryCommentAssignment)
 		}, repo.DamastAdvisoryAssignment)
 	}, reqAnyRepoReader(), repo.DamastAdvisoryReqRead)
 }

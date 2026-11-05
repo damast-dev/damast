@@ -23,6 +23,7 @@ const (
 	AdvisoryDraft     = "draft"     // accepted or created by a maintainer, not public
 	AdvisoryPublished = "published" // public to everyone who can read the repository
 	AdvisoryClosed    = "closed"    // rejected or abandoned, not public
+	AdvisoryWithdrawn = "withdrawn" // published, then retracted; stays public and marked as withdrawn
 )
 
 // AffectedProduct is one package an advisory applies to.
@@ -60,6 +61,7 @@ type SecurityAdvisory struct {
 	UpdatedUnix   timeutil.TimeStamp `xorm:"updated"` // OSV "modified"
 	PublishedUnix timeutil.TimeStamp
 	ClosedUnix    timeutil.TimeStamp
+	WithdrawnUnix timeutil.TimeStamp // OSV "withdrawn"
 }
 
 func (SecurityAdvisory) TableName() string { return "damast_security_advisory" }
@@ -121,8 +123,11 @@ func NewAdvisoryID() string {
 	return string(b)
 }
 
-// IsPublished reports whether everyone who can read the repository may see the advisory.
-func (a *SecurityAdvisory) IsPublished() bool { return a.State == AdvisoryPublished }
+// IsPublished reports whether everyone who can read the repository may see the advisory: it is published, or
+// was published and then withdrawn (a withdrawn advisory stays visible so scanners learn about the withdrawal).
+func (a *SecurityAdvisory) IsPublished() bool {
+	return a.State == AdvisoryPublished || a.State == AdvisoryWithdrawn
+}
 
 // CreateAdvisory inserts a new advisory with a fresh public id.
 func CreateAdvisory(ctx context.Context, a *SecurityAdvisory) error {
@@ -207,6 +212,31 @@ func RemoveAdvisoryCollaborator(ctx context.Context, advisoryID, userID int64) e
 // CreateAdvisoryComment inserts a comment.
 func CreateAdvisoryComment(ctx context.Context, c *AdvisoryComment) error {
 	return db.Insert(ctx, c)
+}
+
+// GetAdvisoryComment returns a comment of the advisory, or util.ErrNotExist.
+func GetAdvisoryComment(ctx context.Context, advisoryID, commentID int64) (*AdvisoryComment, error) {
+	c := &AdvisoryComment{}
+	has, err := db.GetEngine(ctx).Where("advisory_id = ? AND id = ?", advisoryID, commentID).Get(c)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return nil, util.ErrNotExist
+	}
+	return c, nil
+}
+
+// UpdateAdvisoryComment saves the content of a comment.
+func UpdateAdvisoryComment(ctx context.Context, c *AdvisoryComment) error {
+	_, err := db.GetEngine(ctx).ID(c.ID).Cols("content").Update(c)
+	return err
+}
+
+// DeleteAdvisoryComment deletes a comment.
+func DeleteAdvisoryComment(ctx context.Context, c *AdvisoryComment) error {
+	_, err := db.GetEngine(ctx).ID(c.ID).Delete(new(AdvisoryComment))
+	return err
 }
 
 // AdvisoryComments returns the comments of an advisory, oldest first.

@@ -1,6 +1,7 @@
 {{/* DAMAST: state and severity labels of an advisory. Args: the advisory. */}}
 {{if eq .State "published"}}<span class="ui green label">{{ctx.Locale.Tr "damast.security.state.published"}}</span>
 {{else if eq .State "draft"}}<span class="ui grey label">{{ctx.Locale.Tr "damast.security.state.draft"}}</span>
+{{else if eq .State "withdrawn"}}<span class="ui purple basic label">{{ctx.Locale.Tr "damast.security.state.withdrawn"}}</span>
 {{else if eq .State "triage"}}<span class="ui orange label">{{ctx.Locale.Tr "damast.security.state.triage"}}</span>
 {{else}}<span class="ui red basic label">{{ctx.Locale.Tr "damast.security.state.closed"}}</span>{{end}}
 {{if eq .Severity "critical"}}<span class="ui red label">{{ctx.Locale.Tr "damast.security.severity.critical"}}</span>

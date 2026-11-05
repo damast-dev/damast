@@ -21,6 +21,7 @@ import (
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/test"
+	"forgejo.org/modules/util"
 	"forgejo.org/services/damast/security"
 	"forgejo.org/services/mailer"
 	"forgejo.org/tests"
@@ -36,12 +37,19 @@ import (
 
 var (
 	secRoles  = []string{"anonymous", "stranger", "reader", "writer", "admin_team", "admin_collab", "org_owner", "site_admin", "reporter", "collaborator"}
-	secStates = []string{damast.AdvisoryTriage, damast.AdvisoryDraft, damast.AdvisoryPublished, damast.AdvisoryClosed}
+	secStates = []string{damast.AdvisoryTriage, damast.AdvisoryDraft, damast.AdvisoryPublished, damast.AdvisoryClosed, damast.AdvisoryWithdrawn}
 	// roles with admin access: admin team member, admin collaborator, org owner, site admin
 	secAdmins = []string{"admin_team", "admin_collab", "org_owner", "site_admin"}
 	// everyone who may see an unpublished advisory
 	secPrivate = append(slices.Clone(secAdmins), "reporter", "collaborator")
+	// who may edit or delete the matrix's discussion comment: admins and its poster, the collaborator
+	secCommentEditors = append(slices.Clone(secAdmins), "collaborator")
 )
+
+// secPublic reports whether an advisory in the state is public (published, or published and withdrawn).
+func secPublic(state string) bool {
+	return state == damast.AdvisoryPublished || state == damast.AdvisoryWithdrawn
+}
 
 type secRoleSet []string
 
@@ -60,7 +68,7 @@ func secSignedReaders(private bool) secRoleSet {
 
 // secCanView: who may see the advisory (and its title) in that state.
 func secCanView(private bool, state string) secRoleSet {
-	if state == damast.AdvisoryPublished {
+	if secPublic(state) {
 		return secReaders(private)
 	}
 	return secPrivate
@@ -73,6 +81,9 @@ type secRoute struct {
 	ok      int                    // status for allowed roles with the noop payload
 	attack  func(state string) any // a valid, state changing payload sent by every denied role
 	noop    any                    // payload for allowed roles; must not change anything
+	// throwaway: allowed roles act on a fresh comment instead of the matrix's one (for deletes, which
+	// change something even with an empty payload); the test checks it is gone afterwards
+	throwaway bool
 }
 
 func (r secRoute) api() bool { return strings.HasPrefix(r.pattern, "/api/") }
@@ -95,9 +106,13 @@ func secValidForm() url.Values {
 var secValidJSON = map[string]any{"summary": "pwned", "description": "pwned", "severity": "high"}
 
 // secNextState is a valid transition, so a denied request would change something if it got through.
+// Withdrawn is final; "draft" stands in for it.
 func secNextState(state string) string {
-	if state == damast.AdvisoryTriage || state == damast.AdvisoryClosed {
+	switch state {
+	case damast.AdvisoryTriage, damast.AdvisoryClosed, damast.AdvisoryWithdrawn:
 		return damast.AdvisoryDraft
+	case damast.AdvisoryPublished:
+		return damast.AdvisoryWithdrawn
 	}
 	return damast.AdvisoryClosed
 }
@@ -109,50 +124,92 @@ func secAll(set secRoleSet) func(bool, string) secRoleSet {
 var secRoutes = []secRoute{
 	// web
 	{method: "GET", pattern: "/{username}/{reponame}/security", allow: func(p bool, _ string) secRoleSet { return secReaders(p) }, ok: 200},
-	{method: "POST", pattern: "/{username}/{reponame}/security/settings", allow: secAll(secAdmins), ok: 303,
-		attack: func(string) any { return secForm() }, noop: secForm("private_reporting", "on")},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/settings", allow: secAll(secAdmins), ok: 303,
+		attack: func(string) any { return secForm() }, noop: secForm("private_reporting", "on"),
+	},
 	{method: "GET", pattern: "/{username}/{reponame}/security/report", allow: func(p bool, _ string) secRoleSet { return secSignedReaders(p) }, ok: 200},
-	{method: "POST", pattern: "/{username}/{reponame}/security/report", allow: func(p bool, _ string) secRoleSet { return secSignedReaders(p) }, ok: 200,
-		attack: func(string) any { return secValidForm() }, noop: secForm("title", "")},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/report", allow: func(p bool, _ string) secRoleSet { return secSignedReaders(p) }, ok: 200,
+		attack: func(string) any { return secValidForm() }, noop: secForm("title", ""),
+	},
 	{method: "GET", pattern: "/{username}/{reponame}/security/advisories/new", allow: secAll(secAdmins), ok: 200},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/new", allow: secAll(secAdmins), ok: 200,
-		attack: func(string) any { return secValidForm() }, noop: secForm("title", "")},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/new", allow: secAll(secAdmins), ok: 200,
+		attack: func(string) any { return secValidForm() }, noop: secForm("title", ""),
+	},
 	{method: "GET", pattern: "/{username}/{reponame}/security/advisories/{id}", allow: secCanView, ok: 200},
 	{method: "GET", pattern: "/{username}/{reponame}/security/advisories/{id}/edit", allow: secAll(secAdmins), ok: 200},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/edit", allow: secAll(secAdmins), ok: 200,
-		attack: func(string) any { return secValidForm() }, noop: secForm("title", "")},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/state", allow: secAll(secAdmins), ok: 303,
-		attack: func(s string) any { return secForm("state", secNextState(s)) }, noop: secForm("state", "bogus")},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/comments", allow: secAll(secPrivate), ok: 303,
-		attack: func(string) any { return secForm("content", "pwned") }, noop: secForm("content", "")},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/collaborators", allow: secAll(secAdmins), ok: 303,
-		attack: func(string) any { return secForm("username", "STRANGER") }, noop: secForm("username", "no-such-user")},
-	{method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/collaborators/remove", allow: secAll(secAdmins), ok: 303,
-		attack: func(string) any { return secForm("username", "COLLABORATOR") }, noop: secForm("username", "no-such-user")},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/edit", allow: secAll(secAdmins), ok: 200,
+		attack: func(string) any { return secValidForm() }, noop: secForm("title", ""),
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/state", allow: secAll(secAdmins), ok: 303,
+		attack: func(s string) any { return secForm("state", secNextState(s)) }, noop: secForm("state", "bogus"),
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/comments", allow: secAll(secPrivate), ok: 303,
+		attack: func(string) any { return secForm("content", "pwned") }, noop: secForm("content", ""),
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/comments/{comment_id}/edit", allow: secAll(secCommentEditors), ok: 303,
+		attack: func(string) any { return secForm("content", "pwned") }, noop: secForm("content", ""),
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/comments/{comment_id}/delete", allow: secAll(secCommentEditors), ok: 303,
+		attack: func(string) any { return secForm() }, noop: secForm(), throwaway: true,
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/collaborators", allow: secAll(secAdmins), ok: 303,
+		attack: func(string) any { return secForm("username", "STRANGER") }, noop: secForm("username", "no-such-user"),
+	},
+	{
+		method: "POST", pattern: "/{username}/{reponame}/security/advisories/{id}/collaborators/remove", allow: secAll(secAdmins), ok: 303,
+		attack: func(string) any { return secForm("username", "COLLABORATOR") }, noop: secForm("username", "no-such-user"),
+	},
 
 	// API
 	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories", allow: func(p bool, _ string) secRoleSet { return secReaders(p) }, ok: 200},
-	{method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories", allow: secAll(secAdmins), ok: 422,
-		attack: func(string) any { return secValidJSON }, noop: map[string]any{"summary": ""}},
-	{method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/reports", allow: func(p bool, _ string) secRoleSet { return secSignedReaders(p) }, ok: 422,
-		attack: func(string) any { return secValidJSON }, noop: map[string]any{"summary": ""}},
+	{
+		method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories", allow: secAll(secAdmins), ok: 422,
+		attack: func(string) any { return secValidJSON }, noop: map[string]any{"summary": ""},
+	},
+	{
+		method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/reports", allow: func(p bool, _ string) secRoleSet { return secSignedReaders(p) }, ok: 422,
+		attack: func(string) any { return secValidJSON }, noop: map[string]any{"summary": ""},
+	},
 	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/osv", allow: func(p bool, _ string) secRoleSet { return secReaders(p) }, ok: 200},
 	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}", allow: secCanView, ok: 200},
-	{method: "PATCH", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}", allow: secAll(secAdmins), ok: 422,
+	{
+		method: "PATCH", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}", allow: secAll(secAdmins), ok: 422,
 		attack: func(s string) any {
 			return map[string]any{"summary": "pwned", "state": secNextState(s), "collaborating_users": []string{}}
 		},
-		noop: map[string]any{"state": "bogus"}},
-	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/osv", ok: 200,
+		noop: map[string]any{"state": "bogus"},
+	},
+	{
+		method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/osv", ok: 200,
 		allow: func(p bool, s string) secRoleSet { // unpublished advisories have no OSV document, not even for admins
-			if s == damast.AdvisoryPublished {
+			if secPublic(s) {
 				return secReaders(p)
 			}
 			return nil
-		}},
+		},
+	},
 	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments", allow: secAll(secPrivate), ok: 200},
-	{method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments", allow: secAll(secPrivate), ok: 422,
-		attack: func(string) any { return map[string]any{"body": "pwned"} }, noop: map[string]any{"body": ""}},
+	{
+		method: "POST", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments", allow: secAll(secPrivate), ok: 422,
+		attack: func(string) any { return map[string]any{"body": "pwned"} }, noop: map[string]any{"body": ""},
+	},
+	{
+		method: "PATCH", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments/{comment_id}", allow: secAll(secCommentEditors), ok: 422,
+		attack: func(string) any { return map[string]any{"body": "pwned"} }, noop: map[string]any{"body": ""},
+	},
+	{
+		method: "DELETE", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments/{comment_id}", allow: secAll(secCommentEditors), ok: 204,
+		throwaway: true,
+	},
 }
 
 type secEnv struct {
@@ -162,6 +219,7 @@ type secEnv struct {
 	repos      map[bool]*repo_model.Repository
 	advisories map[bool]map[string]*damast.SecurityAdvisory
 	comments   map[int64]string // advisory id -> marker in its private discussion
+	commentIDs map[int64]int64  // advisory id -> id of that comment (posted by "collaborator")
 }
 
 // prepareSecurityEnv creates an organization with a private and a public repository, a user for every role and
@@ -171,7 +229,7 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 	ctx := db.DefaultContext
 	e := &secEnv{
 		users: map[string]*user_model.User{}, sessions: map[string]*TestSession{}, tokens: map[string]string{},
-		repos: map[bool]*repo_model.Repository{}, advisories: map[bool]map[string]*damast.SecurityAdvisory{}, comments: map[int64]string{},
+		repos: map[bool]*repo_model.Repository{}, advisories: map[bool]map[string]*damast.SecurityAdvisory{}, comments: map[int64]string{}, commentIDs: map[int64]int64{},
 	}
 	for _, role := range secRoles {
 		switch role {
@@ -210,12 +268,17 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 				require.NoError(t, security.SetState(ctx, repo, admin, a, damast.AdvisoryPublished))
 			case damast.AdvisoryClosed:
 				require.NoError(t, security.SetState(ctx, repo, admin, a, damast.AdvisoryClosed))
+			case damast.AdvisoryWithdrawn:
+				require.NoError(t, security.SetState(ctx, repo, admin, a, damast.AdvisoryDraft))
+				require.NoError(t, security.SetState(ctx, repo, admin, a, damast.AdvisoryPublished))
+				require.NoError(t, security.SetState(ctx, repo, admin, a, damast.AdvisoryWithdrawn))
 			}
 			require.NoError(t, security.AddCollaborator(ctx, repo, admin, a, e.users["collaborator"]))
 			marker := "ADVCOMMENT-" + damast.NewAdvisoryID()
-			_, err = security.AddComment(ctx, repo, admin, a, marker)
+			c, err := security.AddComment(ctx, repo, e.users["collaborator"], a, marker)
 			require.NoError(t, err)
 			e.comments[a.ID] = marker
+			e.commentIDs[a.ID] = c.ID
 			e.advisories[private][state] = a
 		}
 	}
@@ -226,10 +289,10 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 	return e
 }
 
-func (e *secEnv) path(r secRoute, repo *repo_model.Repository, a *damast.SecurityAdvisory) string {
+func (e *secEnv) path(r secRoute, repo *repo_model.Repository, a *damast.SecurityAdvisory, commentID int64) string {
 	p := strings.ReplaceAll(r.pattern, "{username}/{reponame}", repo.OwnerName+"/"+repo.Name)
 	if a != nil {
-		p = strings.NewReplacer("{id}", a.AdvisoryID, "{ghsa_id}", a.AdvisoryID).Replace(p)
+		p = strings.NewReplacer("{id}", a.AdvisoryID, "{ghsa_id}", a.AdvisoryID, "{comment_id}", fmt.Sprint(commentID)).Replace(p)
 	}
 	return p
 }
@@ -317,18 +380,31 @@ func TestDamastSecurityMatrix(t *testing.T) {
 				for _, role := range secRoles {
 					body := r.noop
 					want := r.ok
-					if !slices.Contains(allowed, role) {
+					commentID := int64(0)
+					if a != nil {
+						commentID = e.commentIDs[a.ID]
+					}
+					denied := !slices.Contains(allowed, role)
+					if denied {
 						want = http.StatusNotFound
 						if r.attack != nil {
 							body = r.attack(state)
 						}
+					} else if r.throwaway {
+						c := &damast.AdvisoryComment{AdvisoryID: a.ID, PosterID: e.users["collaborator"].ID, Content: "throwaway"}
+						require.NoError(t, damast.CreateAdvisoryComment(db.DefaultContext, c))
+						commentID = c.ID
 					}
-					p := e.path(r, repo, a)
+					p := e.path(r, repo, a, commentID)
 					resp := e.do(t, role, r.method, p, r.api(), body)
 					requests++
 					name := fmt.Sprintf("private=%v %s %s state=%s role=%s", private, r.method, r.pattern, state, role)
 					assert.Equal(t, want, resp.Code, name)
 					e.assertNoLeak(t, name, p, resp.Body.String(), role)
+					if r.throwaway && !denied {
+						_, err := damast.GetAdvisoryComment(db.DefaultContext, a.ID, commentID)
+						assert.ErrorIs(t, err, util.ErrNotExist, "%s: the comment is not deleted", name)
+					}
 				}
 			}
 		}
@@ -410,7 +486,7 @@ func TestDamastSecurityLists(t *testing.T) {
 				canView := slices.Contains(secCanView(private, state), role)
 				assert.Equal(t, canView, strings.Contains(web, a.AdvisoryID), "web %v %s %s", private, role, state)
 				assert.Equal(t, canView, strings.Contains(api, a.AdvisoryID), "api %v %s %s", private, role, state)
-				assert.Equal(t, state == damast.AdvisoryPublished, strings.Contains(osv, a.AdvisoryID), "osv %v %s %s", private, role, state)
+				assert.Equal(t, secPublic(state), strings.Contains(osv, a.AdvisoryID), "osv %v %s %s", private, role, state)
 			}
 		}
 	}
@@ -426,7 +502,7 @@ func TestDamastSecurityRoutesCovered(t *testing.T) {
 	got := map[string]bool{}
 	require.NoError(t, chi.Walk(testWebRoutes.R, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(strings.ReplaceAll(route, "/*/", "/"), "/")
-		if method != "HEAD" && (strings.Contains(route, "{reponame}/security")) {
+		if method != "HEAD" && strings.Contains(route, "{reponame}/security") {
 			got[method+" "+route] = true
 		}
 		return nil

@@ -354,6 +354,7 @@ type damastComment struct {
 	Poster   *user_model.User
 	Rendered template.HTML
 	Comment  *damast.AdvisoryComment
+	CanEdit  bool
 }
 
 type damastCredit struct {
@@ -420,14 +421,17 @@ func DamastAdvisoryView(ctx *context.Context) {
 		ctx.Data["DamastCollaborators"] = list
 		rendered := make([]damastComment, 0, len(comments))
 		for _, c := range comments {
-			rendered = append(rendered, damastComment{Poster: users[c.PosterID], Rendered: damastRenderMarkdown(ctx, c.Content), Comment: c})
+			rendered = append(rendered, damastComment{
+				Poster: users[c.PosterID], Rendered: damastRenderMarkdown(ctx, c.Content), Comment: c,
+				CanEdit: security.CanEditComment(c, ctx.Doer, level),
+			})
 		}
 		ctx.Data["DamastComments"] = rendered
 	}
 	ctx.HTML(http.StatusOK, tplDamastAdvisory)
 }
 
-// DamastAdvisoryStatePost accepts, publishes, closes or reopens an advisory.
+// DamastAdvisoryStatePost accepts, publishes, closes, reopens or withdraws an advisory.
 func DamastAdvisoryStatePost(ctx *context.Context) {
 	a, _ := damastAdvisory(ctx)
 	if err := security.SetState(ctx, ctx.Repo.Repository, ctx.Doer, a, ctx.FormString("state")); err != nil {
@@ -489,6 +493,42 @@ func DamastAdvisoryCollaboratorRemovePost(ctx *context.Context) {
 			ctx.ServerError("RemoveCollaborator", err)
 			return
 		}
+	}
+	ctx.Redirect(damastAdvisoryLink(ctx, a))
+}
+
+// DamastAdvisoryCommentAssignment loads a comment of the loaded advisory that the doer may edit (its poster
+// or an admin), or answers 404.
+func DamastAdvisoryCommentAssignment(ctx *context.Context) {
+	a, level := damastAdvisory(ctx)
+	c, err := damast.GetAdvisoryComment(ctx, a.ID, ctx.ParamsInt64("comment_id"))
+	if errors.Is(err, util.ErrNotExist) || (err == nil && !security.CanEditComment(c, ctx.Doer, level)) {
+		ctx.NotFound("", nil)
+		return
+	} else if err != nil {
+		ctx.ServerError("GetAdvisoryComment", err)
+		return
+	}
+	ctx.Data["DamastComment"] = c
+}
+
+// DamastAdvisoryCommentEditPost edits a comment of the private discussion.
+func DamastAdvisoryCommentEditPost(ctx *context.Context) {
+	a, _ := damastAdvisory(ctx)
+	if err := security.EditComment(ctx, ctx.Data["DamastComment"].(*damast.AdvisoryComment), ctx.FormString("content")); err != nil {
+		if !damastFlashError(ctx, err, false) {
+			return
+		}
+	}
+	ctx.Redirect(damastAdvisoryLink(ctx, a))
+}
+
+// DamastAdvisoryCommentDeletePost deletes a comment of the private discussion.
+func DamastAdvisoryCommentDeletePost(ctx *context.Context) {
+	a, _ := damastAdvisory(ctx)
+	if err := security.DeleteComment(ctx, ctx.Data["DamastComment"].(*damast.AdvisoryComment)); err != nil {
+		ctx.ServerError("DeleteComment", err)
+		return
 	}
 	ctx.Redirect(damastAdvisoryLink(ctx, a))
 }
