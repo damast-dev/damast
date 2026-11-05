@@ -37,7 +37,7 @@ function isMobile() {
 
 // tree path of a /src/ URL of the current ref, or null for anything else
 export function treePathFromUrl(pathname, repoLink, refSubUrl) {
-  const prefix = decodeURI(`${repoLink}/src/${refSubUrl}`);
+  const prefix = decodeURIComponent(`${repoLink}/src/${refSubUrl}`);
   const decoded = decodeURIComponent(pathname);
   if (decoded === prefix) return '';
   if (!decoded.startsWith(`${prefix}/`)) return null;
@@ -107,15 +107,24 @@ async function initSwappedContent(container) {
   // applying the #L hash makes repo-code.ts push the same URL again, which would add a history entry
   const pushState = window.history.pushState;
   window.history.pushState = window.history.replaceState;
+  // the page load already registered the fold and permalink click listeners of repo-code.ts, which come
+  // after its line click listener: let only that first one through
+  const addEventListener = document.addEventListener;
+  let clickListeners = 0;
+  document.addEventListener = function (type, ...args) {
+    if (type === 'click' && ++clickListeners > 1) return;
+    addEventListener.call(this, type, ...args);
+  };
   try {
     if (!codeViewReady && container.querySelector('.code-view .lines-num')) {
       codeViewReady = true;
-      initRepoCodeView(); // registers its document-level listeners once and applies the #L hash
+      initRepoCodeView(); // registers its line listeners once and applies the #L hash
     } else if (window.location.hash) {
       window.dispatchEvent(new Event('hashchange'));
     }
   } finally {
     window.history.pushState = pushState;
+    document.addEventListener = addEventListener;
   }
   addToggle();
   // the branch dropdown pushes its data from an inline module script, which runs asynchronously
@@ -147,8 +156,12 @@ async function navigate(url, push) {
       if (!push) tree?.setCurrent(path);
     }
     window.config.pageData.branchDropdownDataList = [];
+    // unmounted apps release their document listeners, which would otherwise keep the old column alive
+    for (const el of current.querySelectorAll('.js-branch-tag-selector')) el.__vue_app__?.unmount();
     htmx.swap(current, fresh.outerHTML, {swapStyle: 'outerHTML', swapDelay: 0, settleDelay: 0}, {title: doc.title});
     await initSwappedContent(document.querySelector(contentSelector));
+    const status = document.getElementById('damast-file-tree-status');
+    if (status) status.textContent = doc.title; // screen readers hear that the content changed
     if (push) {
       window.scrollTo(0, 0);
       if (isMobile()) setVisible(false, false);

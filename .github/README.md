@@ -52,7 +52,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Forgejo:** the code view shows one folder at a time. To open a file three folders down, you click through three pages, and to look at its neighbour you click back up again. The only file tree is the one in pull request diffs.
 
-**On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
+**On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. On the repository's start page it stays hidden until you open it, and blame pages keep their full width. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
 
 ### Its own name
 
