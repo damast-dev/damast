@@ -22,9 +22,14 @@ import (
 	"forgejo.org/modules/damast/coauthor"
 	"forgejo.org/modules/damast/suggestion"
 	"forgejo.org/modules/gitrepo"
+	"forgejo.org/modules/lfs"
 	"forgejo.org/modules/log"
+	"forgejo.org/services/authz"
 	files_service "forgejo.org/services/repository/files"
 )
+
+// MaxBatch is the most suggestions one commit applies; each costs a git blame.
+const MaxBatch = 100
 
 // Errors returned by Apply. Each has a locale key "damast.suggestions.err_<name>".
 var (
@@ -58,16 +63,20 @@ func ErrorKey(err error) (key string, status int) {
 // Apply commits the suggestions of the given review comments to the head
 // branch of pr as one commit, credits their authors with Co-authored-by
 // trailers and resolves their conversations. It returns the new commit ID.
-// versions maps comment IDs to the content version the doer has seen; a comment
-// edited since then is refused, so nobody commits a suggestion they haven't seen.
-func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequest, commentIDs []int64, versions map[int64]int, message string) (string, error) {
+// versions must map every comment ID to the content version the doer has seen;
+// a comment edited since then is refused, so nobody commits a suggestion they
+// haven't seen. reducer is the restriction of doer's token, nil if none.
+func Apply(ctx context.Context, doer *user_model.User, reducer authz.AuthorizationReducer, pr *issues_model.PullRequest, commentIDs []int64, versions map[int64]int, message string) (string, error) {
 	if err := pr.LoadIssue(ctx); err != nil {
 		return "", err
 	}
 	if pr.HasMerged || pr.Issue.IsClosed {
 		return "", ErrClosed
 	}
-	ok, err := damast_model.CanApplySuggestions(ctx, doer, pr)
+	if len(commentIDs) > MaxBatch {
+		return "", fmt.Errorf("%w: more than %d suggestions", ErrInvalid, MaxBatch)
+	}
+	ok, err := damast_model.CanApplySuggestions(ctx, doer, reducer, pr)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +100,9 @@ func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequ
 		if c.IssueID != pr.IssueID {
 			return "", fmt.Errorf("%w: comment %d not found", ErrInvalid, id)
 		}
-		if v, ok := versions[id]; ok && v != c.ContentVersion {
+		if v, ok := versions[id]; !ok {
+			return "", fmt.Errorf("%w: no content version for comment %d", ErrInvalid, id)
+		} else if v != c.ContentVersion {
 			return "", fmt.Errorf("%w: comment %d", ErrEdited, id)
 		}
 		if err := c.LoadReview(ctx); err != nil && !issues_model.IsErrReviewNotExist(err) {
@@ -145,8 +156,14 @@ func Apply(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequ
 		f := files[blame.FilePath]
 		if f == nil {
 			content, entry, err := damast_model.ReadFileAt(headRepo, headID, blame.FilePath)
-			if err != nil {
+			if errors.Is(err, damast_model.ErrFileTooLarge) {
+				return "", fmt.Errorf("%w: comment %d: %v", ErrInvalid, c.ID, err)
+			} else if err != nil {
 				return "", fmt.Errorf("%w: comment %d", ErrOutdated, c.ID)
+			}
+			// An edited LFS pointer swaps binary content the diff can't show.
+			if p, err := lfs.ReadPointerFromBuffer(content); err == nil && p.IsValid() {
+				return "", fmt.Errorf("%w: comment %d: LFS pointer", ErrInvalid, c.ID)
 			}
 			f = &file{content: content, sha: entry.ID.String(), opts: files_service.RepoFileOptionMode(entry.Mode())}
 			files[blame.FilePath] = f

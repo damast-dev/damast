@@ -18,6 +18,7 @@
 	"damast.suggestions.multiple": "Nur ein Kommentar mit genau einem Vorschlag kann übernommen werden",
 	"damast.suggestions.old_side": "Vorschläge können nur Zeilen der neuen Version ändern",
 	"damast.suggestions.outdated": "Veraltet",
+	"damast.suggestions.too_large": "Zu groß zum Übernehmen",
 	"damast.suggestions.edited": "Ein Vorschlag wurde bearbeitet. Lade die Seite neu und versuche es noch einmal.",
 	"damast.suggestions.err_not_allowed": "Du kannst nicht auf den Branch dieses Pull-Requests pushen.",
 	"damast.suggestions.err_closed": "Dieser Pull-Request ist geschlossen.",
