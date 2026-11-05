@@ -40,6 +40,19 @@ func Strip(title string) string {
 	return title
 }
 
+// DisplayTitle is the title to show: pull requests without their WIP prefix, issues unchanged.
+func DisplayTitle(title string, isPull bool) string {
+	if !isPull {
+		return title
+	}
+	return Strip(title)
+}
+
+// Enabled reports whether drafts can be created, i.e. at least one WIP prefix is configured.
+func Enabled() bool {
+	return len(setting.Repository.PullRequest.WorkInProgressPrefixes) > 0
+}
+
 // Mark returns the title with the first configured WIP prefix, unless it already has one.
 func Mark(title string) string {
 	prefixes := setting.Repository.PullRequest.WorkInProgressPrefixes

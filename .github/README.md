@@ -55,8 +55,9 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 **On Damast:** drafts work like on GitHub.
 
 - **Create pull request ▾** has a second option, **Create draft pull request**.
-- Drafts show a **Draft** badge in pull request lists, on the dashboard, in notifications and on project boards, and their title without the prefix.
+- Drafts show a **Draft** badge in pull request lists, on the dashboard, in notifications and on project boards, and their title without the prefix (also in the page header, the browser tab and cross-references in the timeline).
 - The merge box of a draft has a **Ready for review** button. The sidebar has **Convert to draft**.
+- Converting a pull request to a draft cancels its scheduled auto merge, so marking it ready never merges it unasked.
 - Code owners are asked for review when a draft becomes ready, not while you're still working on it. You can still request reviews by hand at any time.
 - The API takes `"draft": true` when you create a pull request, and [`mast`](https://github.com/damast-dev/mast) has `mast pr create --draft`, `mast pr ready` and `mast pr draft`.
 

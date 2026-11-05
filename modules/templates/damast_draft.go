@@ -12,8 +12,5 @@ func DamastIsDraftPull(title string, isPull bool) bool {
 
 // DamastPullTitle returns the title to display: draft pull requests without their WIP prefix.
 func DamastPullTitle(title string, isPull bool) string {
-	if !isPull {
-		return title
-	}
-	return draft.Strip(title)
+	return draft.DisplayTitle(title, isPull)
 }
