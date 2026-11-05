@@ -1,0 +1,37 @@
+{{/* DAMAST: a review comment's ```suggestion block as a mini diff, with apply buttons for people who may commit it. Args: comment, doer (the signed-in user or nil) */}}
+{{with DamastSuggestion ctx .doer .comment}}
+<div class="damast-suggestion{{if ne .Problem "damast.suggestions.multiple"}} damast-suggestion-replaces{{end}}" data-comment-id="{{.Comment.ID}}" data-content-version="{{.Comment.ContentVersion}}"{{if .CanApply}} data-apply-url="{{.ApplyLink}}" data-edited-error="{{ctx.Locale.Tr "damast.suggestions.edited"}}"{{end}}>
+	<div class="damast-suggestion-header">
+		{{svg "octicon-file-diff"}}
+		<span>{{ctx.Locale.Tr "damast.suggestions.title"}}</span>
+		{{if .Problem}}<span class="ui basic label">{{ctx.Locale.Tr .Problem}}</span>{{end}}
+	</div>
+	{{if ne .Problem "damast.suggestions.multiple"}}
+	<table class="damast-suggestion-diff">
+		<tbody>
+			{{range .Old}}<tr class="damast-suggestion-del"><td class="damast-suggestion-marker">-</td><td><code>{{.}}</code></td></tr>{{end}}
+			{{range .New}}<tr class="damast-suggestion-add"><td class="damast-suggestion-marker">+</td><td><code>{{.}}</code></td></tr>{{end}}
+		</tbody>
+	</table>
+	{{end}}
+	{{if .CanApply}}
+	<div class="damast-suggestion-actions">
+		<button type="button" class="ui tiny primary button damast-suggestion-commit">{{ctx.Locale.Tr "damast.suggestions.commit"}}</button>
+		<button type="button" class="ui tiny basic button damast-suggestion-add-batch">{{ctx.Locale.Tr "damast.suggestions.add_to_batch"}}</button>
+		<button type="button" class="ui tiny basic button damast-suggestion-remove-batch tw-hidden">{{ctx.Locale.Tr "damast.suggestions.remove_from_batch"}}</button>
+		<button type="button" class="ui tiny primary button damast-suggestion-commit-batch tw-hidden">{{ctx.Locale.Tr "damast.suggestions.commit_batch"}} <span>(<span class="damast-suggestion-count">0</span>)</span></button>
+	</div>
+	<form class="ui form damast-suggestion-form tw-hidden">
+		<div class="field">
+			<label>{{ctx.Locale.Tr "damast.suggestions.message"}}
+				<textarea name="message" rows="2">{{.Message}}</textarea>
+			</label>
+		</div>
+		<div class="button-sequence tw-justify-end">
+			<button type="button" class="ui tiny basic button damast-suggestion-cancel">{{ctx.Locale.Tr "cancel"}}</button>
+			<button type="submit" class="ui tiny primary button damast-suggestion-submit">{{ctx.Locale.Tr "damast.suggestions.commit_changes"}}</button>
+		</div>
+	</form>
+	{{end}}
+</div>
+{{end}}
