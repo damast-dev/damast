@@ -9,7 +9,7 @@
 			<div class="text grey">{{ctx.Locale.Tr "damast.drafts.ready_help" .WorkInProgressPrefix}}</div>
 		</div>
 	</div>
-	{{if or .HasIssuesOrPullsWritePermission .IsIssuePoster}}
+	{{if and (or .HasIssuesOrPullsWritePermission .IsIssuePoster) (not .Repository.IsArchived)}}
 		<button class="ui primary compact button" data-test-name="damast-ready-for-review">{{ctx.Locale.Tr "damast.drafts.ready"}}</button>
 	{{end}}
 </div>

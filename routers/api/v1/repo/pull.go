@@ -521,6 +521,10 @@ func CreatePullRequest(ctx *context.APIContext) {
 	}
 
 	if form.Draft { // DAMAST: GitHub-compatible draft flag
+		if !damast_draft.Enabled() {
+			ctx.Error(http.StatusUnprocessableEntity, "Draft", "draft pull requests are disabled: [repository.pull-request] WORK_IN_PROGRESS_PREFIXES is empty")
+			return
+		}
 		form.Title = damast_draft.Mark(form.Title)
 	}
 

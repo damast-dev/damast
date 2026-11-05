@@ -12,12 +12,16 @@ import (
 
 	auth_model "forgejo.org/models/auth"
 	issues_model "forgejo.org/models/issues"
+	pull_model "forgejo.org/models/pull"
 	repo_model "forgejo.org/models/repo"
 	unit_model "forgejo.org/models/unit"
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/git"
+	"forgejo.org/modules/setting"
 	api "forgejo.org/modules/structs"
+	"forgejo.org/modules/test"
+	"forgejo.org/services/automerge"
 	"forgejo.org/services/forms"
 	files_service "forgejo.org/services/repository/files"
 	"forgejo.org/tests/forgery"
@@ -174,6 +178,24 @@ func TestDamastDraftPullRequests(t *testing.T) {
 			assert.Equal(t, 1, damastCodeOwnerRequests(t, getPR(t, "draft-1")))
 		})
 
+		t.Run("convert to draft cancels a scheduled auto merge", func(t *testing.T) {
+			pr = getPR(t, "draft-1")
+			require.False(t, pr.IsWorkInProgress(t.Context()))
+			scheduled, err := automerge.ScheduleAutoMerge(t.Context(), user2, pr, repo_model.MergeStyleMerge, "", false)
+			require.NoError(t, err)
+			require.True(t, scheduled)
+
+			setTitle(t, owner, pr, "WIP: My feature", http.StatusOK)
+			exist, _, err := pull_model.GetScheduledMergeByPullID(t.Context(), pr.ID)
+			require.NoError(t, err)
+			assert.False(t, exist, "a draft has no auto merge, like on GitHub")
+			unittest.AssertExistsAndLoadBean(t, &issues_model.Comment{IssueID: pr.IssueID, Type: issues_model.CommentTypePRUnScheduledToAutoMerge, PosterID: user2.ID})
+
+			setTitle(t, owner, pr, "My feature", http.StatusOK)
+			pr = getPR(t, "draft-1")
+			assert.False(t, pr.HasMerged, "ready for review does not merge")
+		})
+
 		t.Run("manual review request while draft", func(t *testing.T) {
 			pr3 := createDraft(t, "draft-3", "Manual request")
 			owner.MakeRequest(t, NewRequestWithValues(t, "POST", link+"/issues/request_review", map[string]string{
@@ -238,6 +260,44 @@ func TestDamastDraftPullRequests(t *testing.T) {
 			DecodeJSON(t, MakeRequest(t, req, http.StatusCreated), &apiPR)
 			assert.True(t, apiPR.Draft)
 			assert.Equal(t, "WIP: Prefixed", apiPR.Title)
+		})
+
+		t.Run("browser title and timeline cross-references hide the prefix", func(t *testing.T) {
+			draftPR := createDraft(t, "draft-xref", "Cross ref")
+			issueReq := NewRequestWithJSON(t, "POST", fmt.Sprintf("/api/v1/repos/%s/issues", repo.FullName()), &api.CreateIssueOption{Title: "Referenced issue"}).AddTokenAuth(ownerToken)
+			var issue api.Issue
+			DecodeJSON(t, MakeRequest(t, issueReq, http.StatusCreated), &issue)
+			body := fmt.Sprintf("refs #%d", issue.Index)
+			MakeRequest(t, NewRequestWithJSON(t, "PATCH", fmt.Sprintf("/api/v1/repos/%s/pulls/%d", repo.FullName(), draftPR.Index), &api.EditPullRequestOption{Body: &body}).AddTokenAuth(ownerToken), http.StatusCreated)
+
+			doc := NewHTMLParser(t, owner.MakeRequest(t, NewRequest(t, "GET", fmt.Sprintf("%s/pulls/%d", link, draftPR.Index)), http.StatusOK).Body)
+			assert.True(t, strings.HasPrefix(doc.Find("head title").Text(), fmt.Sprintf("#%d - Cross ref - ", draftPR.Index)), doc.Find("head title").Text())
+
+			doc = NewHTMLParser(t, owner.MakeRequest(t, NewRequest(t, "GET", fmt.Sprintf("%s/issues/%d", link, issue.Index)), http.StatusOK).Body)
+			assert.Equal(t, "Cross ref", strings.TrimSpace(doc.Find(".timeline-item.event .detail b").First().Text()))
+		})
+
+		t.Run("drafts disabled without prefixes", func(t *testing.T) {
+			defer test.MockVariableValue(&setting.Repository.PullRequest.WorkInProgressPrefixes, []string{})()
+			// (upstream's compare page needs at least one prefix itself, so only the API and the sidebar are checked)
+			damastDraftBranch(t, repo, user2, "no-prefixes")
+
+			req := NewRequestWithJSON(t, "POST", fmt.Sprintf("/api/v1/repos/%s/pulls", repo.FullName()), &api.CreatePullRequestOption{
+				Head: "no-prefixes", Base: "main", Title: "No prefixes", Draft: true,
+			}).AddTokenAuth(ownerToken)
+			MakeRequest(t, req, http.StatusUnprocessableEntity)
+
+			doc := NewHTMLParser(t, owner.MakeRequest(t, NewRequest(t, "GET", fmt.Sprintf("%s/pulls/%d", link, pr.Index)), http.StatusOK).Body)
+			assert.Equal(t, 0, doc.Find(`.toggle-wip`).Length())
+		})
+
+		t.Run("no toggles in an archived repository", func(t *testing.T) {
+			draftPR := createDraft(t, "draft-archived", "Archived draft")
+			archived := true
+			MakeRequest(t, NewRequestWithJSON(t, "PATCH", "/api/v1/repos/"+repo.FullName(), &api.EditRepoOption{Archived: &archived}).AddTokenAuth(ownerToken), http.StatusOK)
+			doc := NewHTMLParser(t, owner.MakeRequest(t, NewRequest(t, "GET", fmt.Sprintf("%s/pulls/%d", link, draftPR.Index)), http.StatusOK).Body)
+			assert.Equal(t, 0, doc.Find(`[data-test-name="damast-ready-for-review"]`).Length())
+			assert.Equal(t, 0, doc.Find(`.toggle-wip a`).Length())
 		})
 	})
 }

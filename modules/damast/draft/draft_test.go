@@ -29,7 +29,12 @@ func TestDraftTitle(t *testing.T) {
 	assert.Equal(t, "wip: x", Mark("wip: x"))
 	assert.Equal(t, "[WIP] x", Mark("[WIP] x"))
 
+	assert.Equal(t, "x", DisplayTitle("WIP: x", true))
+	assert.Equal(t, "WIP: x", DisplayTitle("WIP: x", false), "issues keep their title")
+	assert.True(t, Enabled())
+
 	defer test.MockVariableValue(&setting.Repository.PullRequest.WorkInProgressPrefixes, []string{})()
 	assert.Equal(t, "x", Mark("x"))
 	assert.False(t, IsDraft("WIP: x"))
+	assert.False(t, Enabled())
 }
