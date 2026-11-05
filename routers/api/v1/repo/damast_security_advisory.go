@@ -364,6 +364,12 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	if form.Credits != nil {
 		o.Credits, changed = *form.Credits, true
 	}
+	if form.Severity != nil {
+		if err := security.CheckSeverity(*form.Severity, o.CVSSVectorString); err != nil {
+			damastAPIError(ctx, err)
+			return
+		}
+	}
 	var in *security.Input
 	if changed {
 		if in, err = security.InputFromAPI(ctx, o); err != nil {
