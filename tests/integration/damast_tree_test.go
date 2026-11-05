@@ -126,6 +126,15 @@ func TestDamastTreeView(t *testing.T) {
 			want := get(t, "branch/main/src").summary()
 			assert.Equal(t, want, get(t, "tag/v1/src").summary())
 			assert.Equal(t, want, get(t, "commit/"+sha+"/src").summary())
+
+			// only a full commit ID pins the tree
+			cacheControl := func(ref string) string {
+				return MakeRequest(t, NewRequest(t, "GET", base+ref+"/src"), http.StatusOK).Header().Get("Cache-Control")
+			}
+			assert.Equal(t, "private, max-age=31536000, immutable", cacheControl("commit/"+sha))
+			for _, ref := range []string{"commit/" + sha[:10], "branch/main", "tag/v1"} {
+				assert.NotContains(t, cacheControl(ref), "immutable", ref)
+			}
 		})
 
 		t.Run("NotFound", func(t *testing.T) {

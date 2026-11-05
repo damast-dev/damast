@@ -82,6 +82,10 @@ func DamastTreeView(ctx *context.Context) {
 		}
 		dirs = append(dirs, dir)
 	}
+	if ctx.Repo.IsViewCommit && ctx.Repo.RefName == ctx.Repo.Commit.ID.String() {
+		// a full commit ID never changes its tree; private, because access to the repository can
+		ctx.Resp.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	}
 	ctx.JSON(http.StatusOK, map[string]any{"dirs": dirs})
 }
 

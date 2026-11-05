@@ -15,6 +15,7 @@
 	data-text-hide="{{ctx.Locale.Tr "damast.file_tree.hide"}}">
 	<div class="damast-file-tree-loading">{{ctx.Locale.Tr "damast.file_tree.loading"}}</div>
 </nav>
+<div id="damast-file-tree-status" class="tw-sr-only" role="status"></div>{{/* announces the page title after a content swap */}}
 <script>
 	// decide visibility before the content is painted, so the layout does not jump once the tree is mounted
 	(() => {

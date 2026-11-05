@@ -140,11 +140,32 @@ test('swaps do not pile up listeners of the replaced content', async ({page, bro
     await expect(page.locator('.branch-dropdown-button')).toBeVisible();
   }
   expect(await bodyClickListeners()).toBe(before);
+  // screen readers hear the new page
+  await expect(page.locator('#damast-file-tree-status[role="status"]')).toHaveText(await page.title());
   // the dropdown of the swapped content still opens and closes
   await page.locator('.branch-dropdown-button').click();
   await expect(page.locator('.js-branch-tag-selector .scrolling.menu')).toBeVisible();
   await page.locator('.repo-path').click();
   await expect(page.locator('.js-branch-tag-selector .scrolling.menu')).toBeHidden();
+});
+
+test('the first file after a folder page adds only the line selection listener', async ({page, browserName, isMobile}) => {
+  test.skip(browserName !== 'chromium' || isMobile, 'listener count needs the Chrome DevTools protocol');
+  const cdp = await page.context().newCDPSession(page);
+  const documentClickListeners = async () => {
+    const {result} = await cdp.send('Runtime.evaluate', {expression: 'document'});
+    const {listeners} = await cdp.send('DOMDebugger.getEventListeners', {objectId: result.objectId});
+    return listeners.filter((l) => l.type === 'click').length;
+  };
+  await page.goto(`${base}/x/y`);
+  await expect(item(page, 'x/y/a.txt')).toBeVisible();
+  const before = await documentClickListeners();
+  await item(page, 'x/y/a.txt').locator('a').click();
+  await expect(page.locator('.file-view .lines-code')).toBeVisible();
+  expect(await documentClickListeners()).toBe(before + 1);
+  await page.locator('.file-view .lines-num span[id="L1"]').click();
+  await expect(page).toHaveURL(`${base}/x/y/a.txt#L1`);
+  await expect(page.locator('.file-view tr.active')).toHaveCount(1);
 });
 
 test.describe('mobile', () => {
