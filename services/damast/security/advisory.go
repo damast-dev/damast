@@ -89,7 +89,7 @@ func CanReport(ctx context.Context, repo *repo_model.Repository, doer *user_mode
 	if doer == nil || doer.ID <= 0 || !readsRepo || repo.IsArchived || user_model.IsBlocked(ctx, repo.OwnerID, doer.ID) {
 		return false, nil
 	}
-	return damast.PrivateReportingEnabled(ctx, repo.ID)
+	return damast.PrivateReportingEnabled(ctx, repo)
 }
 
 // Update replaces the content of an advisory. Editing a published advisory moves its OSV "modified" time.

@@ -253,7 +253,7 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 			},
 		})
 		e.repos[private] = repo
-		require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+		require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 		e.advisories[private] = map[string]*damast.SecurityAdvisory{}
 		for _, state := range secStates {
 			a, err := security.Report(ctx, repo, e.users["reporter"], &security.Input{
