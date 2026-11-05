@@ -12,3 +12,7 @@ var DamastCheckRead func(ctx context.Context, p *Package) error
 // DamastCheckReadFile does the same for a single file, for lookups that skip the package descriptor
 // (container HEAD/GET of blobs and manifests).
 var DamastCheckReadFile func(ctx context.Context, pf *PackageFile) error
+
+// DamastCheckReadPackageID does the same by package ID; version and file lists use it to drop hidden
+// packages, so they look missing instead of answering with a different error.
+var DamastCheckReadPackageID func(ctx context.Context, packageID int64) error

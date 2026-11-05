@@ -28,6 +28,7 @@ import (
 	container_module "forgejo.org/modules/packages/container"
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/util"
+	"forgejo.org/services/authz"
 )
 
 type grantKey struct{}
@@ -40,6 +41,8 @@ type Grant struct {
 	Mode perm.AccessMode
 	Doer *user_model.User
 	Task *actions_model.ActionTask // set when authenticated with an Actions token
+	// Reducer limits repository permissions like the token does elsewhere (public-only tokens); nil = none
+	Reducer authz.AuthorizationReducer
 
 	denied bool
 }
@@ -91,6 +94,7 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 func init() {
 	packages_model.DamastCheckRead = CheckRead
 	packages_model.DamastCheckReadFile = OnReadFile
+	packages_model.DamastCheckReadPackageID = checkReadPackageID
 }
 
 // CheckRead rejects reads under a provisional read Grant unless the reader may read the package's
@@ -107,12 +111,7 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 	if repo == nil {
 		return g.deny()
 	}
-	var rp access_model.Permission
-	if g.Task != nil {
-		rp, err = access_model.GetActionRepoPermission(ctx, repo, g.Task)
-	} else {
-		rp, err = access_model.GetUserRepoPermission(ctx, repo, g.Doer)
-	}
+	rp, err := repoPermission(ctx, g, g.Doer, repo)
 	if err != nil {
 		return err
 	}
@@ -132,7 +131,14 @@ func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 	if err != nil {
 		return err
 	}
-	p, err := packages_model.GetPackageByID(ctx, pv.PackageID)
+	return checkReadPackageID(ctx, pv.PackageID)
+}
+
+func checkReadPackageID(ctx context.Context, packageID int64) error {
+	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
+		return nil
+	}
+	p, err := packages_model.GetPackageByID(ctx, packageID)
 	if err != nil {
 		return err
 	}
@@ -167,14 +173,21 @@ func grantFrom(ctx context.Context) *Grant {
 	return g
 }
 
-func canWrite(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (bool, error) {
-	var p access_model.Permission
-	var err error
-	if g != nil && g.Task != nil {
-		p, err = access_model.GetActionRepoPermission(ctx, repo, g.Task)
-	} else {
-		p, err = access_model.GetUserRepoPermission(ctx, repo, doer)
+func repoPermission(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (access_model.Permission, error) {
+	switch {
+	case g != nil && g.Task != nil:
+		return access_model.GetActionRepoPermission(ctx, repo, g.Task)
+	case g != nil && g.Reducer != nil:
+		return access_model.GetUserRepoPermissionWithReducer(ctx, repo, doer, g.Reducer)
 	}
+	return access_model.GetUserRepoPermission(ctx, repo, doer)
+}
+
+func canWrite(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (bool, error) {
+	if repo.IsArchived {
+		return false, nil // archived repositories are read-only in Forgejo, their packages too
+	}
+	p, err := repoPermission(ctx, g, doer, repo)
 	if err != nil {
 		return false, err
 	}

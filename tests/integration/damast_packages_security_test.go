@@ -5,8 +5,10 @@ package integration
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -62,6 +64,17 @@ func damastPutGeneric(t *testing.T, user, name, version string, status int) {
 	t.Helper()
 	u := fmt.Sprintf("/api/packages/user5/generic/%s/%s/file.bin", name, version)
 	MakeRequest(t, NewRequestWithBody(t, "PUT", u, bytes.NewReader([]byte("x"))).AddBasicAuth(user), status)
+}
+
+func damastPutNpm(t *testing.T, user, name, version, repoURL string, status int) {
+	t.Helper()
+	data := "H4sIAAAAAAAA/ytITM5OTE/VL4DQelnF+XkMVAYGBgZmJiYK2MRBwNDcSIHB2NTMwNDQzMwAqA7IMDUxA9LUdgg2UFpcklgEdAql5kD8ogCnhwio5lJQUMpLzE1VslJQcihOzi9I1S9JLS7RhSYIJR2QgrLUouLM/DyQGkM9Az1D3YIiqExKanFyUWZBCVQ2BKhVwQVJDKwosbQkI78IJO/tZ+LsbRykxFXLNdA+HwWjYBSMgpENACgAbtAACAAA"
+	body := `{"_id":"` + name + `","name":"` + name + `","dist-tags":{"latest":"` + version + `"},
+		"versions":{"` + version + `":{"name":"` + name + `","version":"` + version + `",
+		"dist":{"integrity":"sha512-yA4FJsVhetynGfOC1jFf79BuS+jrHbm0fhh+aHzCQkOaOBXKf9oBnC4a6DnLLnEsHQDRLYd00cwj8sCXpC+wIg==","shasum":"aaa7eaf852a948b0aa05afeda35b1badca155d90"},
+		"repository":{"type":"git","url":"` + repoURL + `"}}},
+		"_attachments":{"` + name + `-` + version + `.tgz":{"data":"` + data + `"}}}`
+	MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/npm/"+url.QueryEscape(name), strings.NewReader(body)).AddBasicAuth(user), status)
 }
 
 // Read paths that answer from the database without the package descriptor or file stream.
@@ -124,13 +137,7 @@ func TestDamastPackagesForeignRepoLink(t *testing.T) {
 		name := "@user5/repo4"
 		upload := func(version string, status int) {
 			t.Helper()
-			data := "H4sIAAAAAAAA/ytITM5OTE/VL4DQelnF+XkMVAYGBgZmJiYK2MRBwNDcSIHB2NTMwNDQzMwAqA7IMDUxA9LUdgg2UFpcklgEdAql5kD8ogCnhwio5lJQUMpLzE1VslJQcihOzi9I1S9JLS7RhSYIJR2QgrLUouLM/DyQGkM9Az1D3YIiqExKanFyUWZBCVQ2BKhVwQVJDKwosbQkI78IJO/tZ+LsbRykxFXLNdA+HwWjYBSMgpENACgAbtAACAAA"
-			body := `{"_id":"` + name + `","name":"` + name + `","dist-tags":{"latest":"` + version + `"},
-				"versions":{"` + version + `":{"name":"` + name + `","version":"` + version + `",
-				"dist":{"integrity":"sha512-yA4FJsVhetynGfOC1jFf79BuS+jrHbm0fhh+aHzCQkOaOBXKf9oBnC4a6DnLLnEsHQDRLYd00cwj8sCXpC+wIg==","shasum":"aaa7eaf852a948b0aa05afeda35b1badca155d90"},
-				"repository":{"type":"git","url":"` + setting.AppURL + `user4/evil.git"}}},
-				"_attachments":{"` + name + `-` + version + `.tgz":{"data":"` + data + `"}}}`
-			MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/npm/"+url.QueryEscape(name), strings.NewReader(body)).AddBasicAuth("user4"), status)
+			damastPutNpm(t, "user4", name, version, setting.AppURL+"user4/evil.git", status)
 		}
 		upload("1.0.0", http.StatusCreated)
 		p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeNpm, name)
@@ -179,6 +186,132 @@ func TestDamastPackagesBlockedUser(t *testing.T) {
 	_, err := db.GetEngine(db.DefaultContext).ID(4).Cols("prohibit_login").Update(&user_model.User{ProhibitLogin: true})
 	require.NoError(t, err)
 	put("1.1", http.StatusUnauthorized)
+}
+
+// Hidden packages answer exactly like missing ones (status, type and body), also on paths that look
+// packages up in lists: npm/PyPI/Maven metadata and the container registry.
+func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	damastPrivateOwner(t)
+
+	// user5 publishes unlinked packages named "secret"; user2 only reads repo4
+	damastPutNpm(t, "user5", "@user5/secret", "1.0.0", setting.AppURL+"user5/nothing", http.StatusCreated)
+	MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/maven/com/example/secret/1.0/secret-1.0.jar",
+		bytes.NewReader([]byte("jar"))).AddBasicAuth("user5"), http.StatusCreated)
+	{
+		content := "wheel"
+		body := &bytes.Buffer{}
+		w := multipart.NewWriter(body)
+		part, _ := w.CreateFormFile("content", "secret-1.0-py3-none-any.whl")
+		_, _ = part.Write([]byte(content))
+		_ = w.WriteField("name", "secret")
+		_ = w.WriteField("version", "1.0")
+		_ = w.WriteField("sha256_digest", fmt.Sprintf("%x", sha256.Sum256([]byte(content))))
+		require.NoError(t, w.Close())
+		MakeRequest(t, NewRequestWithBody(t, "POST", "/api/packages/user5/pypi", body).
+			SetHeader("Content-Type", w.FormDataContentType()).AddBasicAuth("user5"), http.StatusCreated)
+	}
+
+	v2token := func(user string) string {
+		t.Helper()
+		resp := MakeRequest(t, NewRequest(t, "GET", "/v2/token").AddBasicAuth(user), http.StatusOK)
+		var tr struct {
+			Token string `json:"token"`
+		}
+		DecodeJSON(t, resp, &tr)
+		return tr.Token
+	}
+	owner, reader := v2token("user5"), v2token("user2")
+	config := `{"architecture":"amd64","os":"linux"}`
+	configDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(config)))
+	manifest := `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"` +
+		configDigest + `","size":` + fmt.Sprint(len(config)) + `},"layers":[]}`
+	MakeRequest(t, NewRequestWithBody(t, "POST", "/v2/user5/secret/blobs/uploads?digest="+configDigest, strings.NewReader(config)).
+		AddTokenAuth(owner), http.StatusCreated)
+	MakeRequest(t, NewRequestWithBody(t, "PUT", "/v2/user5/secret/manifests/latest", strings.NewReader(manifest)).
+		SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").AddTokenAuth(owner), http.StatusCreated)
+	MakeRequest(t, NewRequest(t, "HEAD", "/v2/user5/secret/manifests/latest").AddTokenAuth(owner), http.StatusOK)
+
+	type answer struct {
+		Status     int
+		Type, Body string
+	}
+	ask := func(req *RequestWrapper) answer {
+		t.Helper()
+		resp := MakeRequest(t, req, NoExpectedStatus)
+		return answer{resp.Code, resp.Header().Get("Content-Type"), resp.Body.String()}
+	}
+	basic := func(method, path string) *RequestWrapper { return NewRequest(t, method, path).AddBasicAuth("user2") }
+	bearer := func(method, path string) *RequestWrapper { return NewRequest(t, method, path).AddTokenAuth(reader) }
+	for _, c := range []struct {
+		req  func(method, path string) *RequestWrapper
+		path string // %s is "secret" or "missing"
+	}{
+		{basic, "/api/packages/user5/npm/@user5%%2F%s"},
+		{basic, "/api/packages/user5/pypi/simple/%s"},
+		{basic, "/api/packages/user5/maven/com/example/%s/maven-metadata.xml"},
+		{basic, "/api/packages/user5/maven/com/example/%s/maven-metadata.xml.sha1"},
+		{bearer, "/v2/user5/%s/blobs/" + configDigest},
+		{bearer, "/v2/user5/%s/manifests/latest"},
+	} {
+		for _, method := range []string{"GET", "HEAD"} {
+			missing := ask(c.req(method, fmt.Sprintf(c.path, "missing")))
+			if missing.Status == http.StatusMethodNotAllowed {
+				continue
+			}
+			assert.Equal(t, http.StatusNotFound, missing.Status, "%s %s", method, c.path)
+			assert.Equal(t, missing, ask(c.req(method, fmt.Sprintf(c.path, "secret"))), "%s %s", method, c.path)
+		}
+	}
+}
+
+// Forgejo makes archived repositories read-only; publishing through such a repository must stop too.
+func TestDamastPackagesArchivedRepo(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+	damastPutGeneric(t, "user4", "repo4", "1.0", http.StatusCreated)
+
+	_, err := db.GetEngine(ctx).ID(4).Cols("is_archived").Update(&repo_model.Repository{IsArchived: true})
+	require.NoError(t, err)
+	damastPutGeneric(t, "user4", "repo4", "1.1", http.StatusForbidden)
+
+	task := unittest.AssertExistsAndLoadBean(t, &actions_model.ActionTask{ID: 47})
+	task.RepoID, task.OwnerID, task.IsForkPullRequest = 4, 5, false
+	task.GenerateToken()
+	require.NoError(t, actions_model.UpdateTask(ctx, task, "repo_id", "owner_id", "is_fork_pull_request", "token_hash", "token_salt", "token_last_eight"))
+	MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/generic/ci/1.0/file.bin", bytes.NewReader([]byte("x"))).
+		AddTokenAuth(task.Token), http.StatusForbidden)
+
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/generic/repo4/1.0/file.bin").AddBasicAuth("user4"), http.StatusOK)
+}
+
+// A public-only token can't reach private repositories elsewhere in Forgejo, so it can't publish through one.
+func TestDamastPackagesPublicOnlyToken(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+	session := loginUser(t, "user4")
+	publicOnly := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopePublicOnly, auth_model.AccessTokenScopeWritePackage)
+	full := getTokenForLoggedInUser(t, session, auth_model.AccessTokenScopeWritePackage)
+	put := func(token, version string, status int) {
+		t.Helper()
+		u := fmt.Sprintf("/api/packages/user5/generic/repo4/%s/file.bin", version)
+		MakeRequest(t, NewRequestWithBody(t, "PUT", u, bytes.NewReader([]byte("x"))).AddTokenAuth(token), status)
+	}
+
+	put(publicOnly, "1.0", http.StatusCreated) // public repo: fine
+	_, err := db.GetEngine(ctx).ID(4).Cols("is_private").Update(&repo_model.Repository{IsPrivate: true})
+	require.NoError(t, err)
+	put(publicOnly, "1.1", http.StatusForbidden)
+	put(full, "1.1", http.StatusCreated)
+
+	// reading needs provisional access only for private owners, and Forgejo already turns public-only
+	// tokens away there (reqPackageAccess); this guards that it stays so
+	_, err = db.GetEngine(ctx).ID(5).Cols("visibility").Update(&user_model.User{Visibility: api.VisibleTypePrivate})
+	require.NoError(t, err)
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/generic/repo4/1.0/file.bin").AddTokenAuth(publicOnly), http.StatusForbidden)
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/generic/repo4/1.0/file.bin").AddTokenAuth(full), http.StatusOK)
 }
 
 // OPEN FINDING, documents current behaviour: every non-fork Actions run (and every repo writer) can claim any

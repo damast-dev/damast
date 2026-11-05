@@ -43,6 +43,7 @@ func damastProvisionalAccess(ctx *context.Context) {
 		return
 	}
 	if g != nil {
+		g.Reducer = ctx.Authentication.Reducer() // public-only tokens must not reach private repositories
 		ctx.Package.AccessMode = mode
 		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
 		ctx.Resp = &damastDenyResponse{ResponseWriter: ctx.Resp, grant: g}
