@@ -1269,7 +1269,12 @@ func Routes() *web.Route {
 			})
 
 			m.Get("/", packages.ListPackages)
-		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), reqPackageAccess(perm.AccessModeRead), checkTokenPublicOnly())
+		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), packages.DamastReadAccess, reqPackageAccess(perm.AccessModeRead), checkTokenPublicOnly()) // DAMAST: repo-bound package read
+		m.Group("/damast/packages/{username}", func() { // DAMAST: package settings
+			m.Combo("/settings", reqPackageAccess(perm.AccessModeOwner)).Get(packages.DamastGetOwnerSettings).Patch(packages.DamastEditOwnerSettings)
+			m.Combo("/{type}/{name}/settings").Get(reqPackageAccess(perm.AccessModeRead), packages.DamastGetPackageSettings).
+				Patch(reqPackageAccess(perm.AccessModeWrite), packages.DamastEditPackageSettings)
+		}, reqToken(), tokenRequiresScopes(auth_model.AccessTokenScopeCategoryPackage), context.UserAssignmentAPI(), context.PackageAssignmentAPI(), packages.DamastReadAccess, checkTokenPublicOnly())
 
 		// Organizations
 		m.Get("/user/orgs", reqToken(), tokenRequiresScopes(auth_model.AccessTokenScopeCategoryUser, auth_model.AccessTokenScopeCategoryOrganization), org.ListMyOrgs)
