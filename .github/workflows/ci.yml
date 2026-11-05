@@ -37,3 +37,21 @@ jobs:
         run: go test -tags 'sqlite sqlite_unlock_notify' ./modules/damast/... ./models/damast/... ./services/damast/... ./modules/templates/...
       - name: Integration tests (sqlite)
         run: make 'test-sqlite#TestDamast'
+
+  # Upstream suites of the areas Damast hooks into (packages: models/packages, services/packages,
+  # routers/api/packages, routers/web/user/package.go), so a Damast hook can't break Forgejo behaviour silently.
+  # Runs on go.mod's toolchain: some upstream package tests pin compressed bytes that newer Go versions change.
+  upstream-hooked-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update -q && sudo apt-get install -yq git-lfs && git lfs install --skip-repo
+      - name: Unit tests
+        run: go test -tags 'sqlite sqlite_unlock_notify' ./models/packages/... ./modules/packages/... ./services/packages/... ./routers/api/packages/...
+      - name: Integration tests (sqlite)
+        run: |
+          make integrations.sqlite.test generate-ini-sqlite
+          PROJECT_ROOT="$PWD" PROJECT_CONF=tests/sqlite.ini ./integrations.sqlite.test -test.run '^(TestPackage|TestDoctorPackages|TestFrontendHeaderCount)'
