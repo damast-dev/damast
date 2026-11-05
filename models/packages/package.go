@@ -296,6 +296,11 @@ func GetPackageByName(ctx context.Context, ownerID int64, packageType Type, name
 	if !has {
 		return nil, ErrPackageNotExist
 	}
+	if DamastCheckRead != nil { // DAMAST: hidden packages look missing
+		if err := DamastCheckRead(ctx, p); err != nil {
+			return nil, err
+		}
+	}
 	return p, nil
 }
 

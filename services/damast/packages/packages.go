@@ -72,6 +72,9 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 			return nil, err
 		}
 		repo, err := repo_model.GetRepositoryByID(ctx, task.RepoID)
+		if repo_model.IsErrRepoNotExist(err) {
+			return nil, nil // the run's repository is gone: plain Forgejo rules
+		}
 		if err != nil {
 			return nil, err
 		}

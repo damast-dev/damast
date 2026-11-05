@@ -21,8 +21,21 @@ var damastNonUploadPaths = []string{"/unyank", "/yank", "/-rev/", "/dist-tags/",
 // rubygems, ...) would leak other packages and keep owner-level read.
 var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true}
 
-// Read routes that list several packages or bypass descriptors; provisional read never applies to them.
-var damastListPaths = []string{"/_catalog", "/tags/list", "/-/v1/search", "/dist-tags"}
+// Read routes that list several packages; provisional read never applies to them. Per-package lists
+// (npm dist-tags, container tags/list) are fine: hidden packages look missing there (GetPackageByName,
+// GetVersionsByPackageName).
+var damastListPaths = []string{"/_catalog", "/-/v1/search"}
+
+// damastUploadGet reports GET steps of multi-step uploads (pub: ask for an upload URL, finalize). They get
+// provisional write like the upload itself; finalize checks the package like any write to an existing one.
+// Matched exactly, so no read route (pub package "versions", maven paths) ever gets write.
+func damastUploadGet(path string) bool {
+	parts := strings.SplitN(strings.TrimPrefix(path, "/api/packages/"), "/", 3)
+	if !strings.HasPrefix(path, "/api/packages/") || len(parts) < 3 || parts[1] != "pub" {
+		return false
+	}
+	return parts[2] == "api/packages/versions/new" || strings.HasPrefix(parts[2], "api/packages/versions/new/finalize/")
+}
 
 // damastProvisionalAccess grants provisional access when owner-level access is not enough but the doer
 // has access to a repository of the owner: write for uploads, read for downloads/metadata of the
@@ -82,6 +95,9 @@ func damastRequestMode(req *http.Request) perm.AccessMode {
 		}
 		return perm.AccessModeWrite
 	case http.MethodGet, http.MethodHead:
+		if damastUploadGet(path) {
+			return perm.AccessModeWrite
+		}
 		for _, p := range damastListPaths {
 			if strings.Contains(path, p) {
 				return perm.AccessModeNone

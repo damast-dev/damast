@@ -4,7 +4,9 @@
 package integration
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	gocontext "context"
 	"crypto/sha256"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	actions_model "forgejo.org/models/actions"
 	auth_model "forgejo.org/models/auth"
@@ -25,8 +28,10 @@ import (
 	"forgejo.org/models/unit"
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/log"
 	"forgejo.org/modules/setting"
 	api "forgejo.org/modules/structs"
+	"forgejo.org/modules/test"
 	damast_packages "forgejo.org/services/damast/packages"
 	repo_service "forgejo.org/services/repository"
 	"forgejo.org/tests"
@@ -228,11 +233,19 @@ func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
 	configDigest := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(config)))
 	manifest := `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.image.config.v1+json","digest":"` +
 		configDigest + `","size":` + fmt.Sprint(len(config)) + `},"layers":[]}`
-	MakeRequest(t, NewRequestWithBody(t, "POST", "/v2/user5/secret/blobs/uploads?digest="+configDigest, strings.NewReader(config)).
-		AddTokenAuth(owner), http.StatusCreated)
-	MakeRequest(t, NewRequestWithBody(t, "PUT", "/v2/user5/secret/manifests/latest", strings.NewReader(manifest)).
-		SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").AddTokenAuth(owner), http.StatusCreated)
+	push := func(token, image string) {
+		t.Helper()
+		MakeRequest(t, NewRequestWithBody(t, "POST", "/v2/user5/"+image+"/blobs/uploads?digest="+configDigest, strings.NewReader(config)).
+			AddTokenAuth(token), http.StatusCreated)
+		MakeRequest(t, NewRequestWithBody(t, "PUT", "/v2/user5/"+image+"/manifests/latest", strings.NewReader(manifest)).
+			SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").AddTokenAuth(token), http.StatusCreated)
+	}
+	push(owner, "secret")
 	MakeRequest(t, NewRequest(t, "HEAD", "/v2/user5/secret/manifests/latest").AddTokenAuth(owner), http.StatusOK)
+
+	// user4 (writes repo4) publishes packages linked to repo4, which user2 may read
+	damastPutNpm(t, "user4", "@user5/repo4", "1.0.0", setting.AppURL+"user5/repo4", http.StatusCreated)
+	push(v2token("user4"), "repo4")
 
 	type answer struct {
 		Status     int
@@ -245,6 +258,19 @@ func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
 	}
 	basic := func(method, path string) *RequestWrapper { return NewRequest(t, method, path).AddBasicAuth("user2") }
 	bearer := func(method, path string) *RequestWrapper { return NewRequest(t, method, path).AddTokenAuth(reader) }
+
+	t.Run("per-package lists work for readable packages", func(t *testing.T) {
+		resp := MakeRequest(t, basic("GET", "/api/packages/user5/npm/-/package/@user5%2Frepo4/dist-tags"), http.StatusOK)
+		assert.JSONEq(t, `{"latest":"1.0.0"}`, resp.Body.String())
+		resp = MakeRequest(t, bearer("GET", "/v2/user5/repo4/tags/list"), http.StatusOK)
+		assert.Contains(t, resp.Body.String(), `"latest"`)
+		MakeRequest(t, basic("GET", "/api/packages/user5/npm/@user5%2Frepo4/-/repo4-1.0.0.tgz"), http.StatusOK)
+	})
+
+	// a hidden package must not take an error path (500 + ERROR log) where a missing one doesn't
+	lc, cleanup := test.NewLogChecker(log.DEFAULT, log.ERROR)
+	defer cleanup()
+	lc.Filter("does not exist").StopMark("damast hidden-looks-missing done")
 	for _, c := range []struct {
 		req  func(method, path string) *RequestWrapper
 		path string // %s is "secret" or "missing"
@@ -255,16 +281,26 @@ func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
 		{basic, "/api/packages/user5/maven/com/example/%s/maven-metadata.xml.sha1"},
 		{bearer, "/v2/user5/%s/blobs/" + configDigest},
 		{bearer, "/v2/user5/%s/manifests/latest"},
+		{basic, "/api/packages/user5/npm/@user5%%2F%[1]s/-/%[1]s-1.0.0.tgz"},
+		{basic, "/api/packages/user5/npm/-/package/@user5%%2F%s/dist-tags"},
+		{bearer, "/v2/user5/%s/tags/list"},
 	} {
+		want := http.StatusNotFound
+		if strings.HasSuffix(c.path, "/dist-tags") {
+			want = http.StatusOK // npm answers {} for unknown packages
+		}
 		for _, method := range []string{"GET", "HEAD"} {
 			missing := ask(c.req(method, fmt.Sprintf(c.path, "missing")))
 			if missing.Status == http.StatusMethodNotAllowed {
 				continue
 			}
-			assert.Equal(t, http.StatusNotFound, missing.Status, "%s %s", method, c.path)
+			assert.Equal(t, want, missing.Status, "%s %s", method, c.path)
 			assert.Equal(t, missing, ask(c.req(method, fmt.Sprintf(c.path, "secret"))), "%s %s", method, c.path)
 		}
 	}
+	log.Error("damast hidden-looks-missing done")
+	filtered, _ := lc.Check(5 * time.Second)
+	assert.False(t, filtered[0], "hidden package logged an error")
 }
 
 // Forgejo makes archived repositories read-only; publishing through such a repository must stop too.
@@ -372,4 +408,72 @@ func TestDamastPackagesReadDecidedOncePerRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, damast_packages.CheckRead(rctx, p), "same request: decided once")
 	require.ErrorIs(t, damast_packages.CheckRead(request(), p), packages_model.ErrPackageNotExist, "next request: decided again")
+}
+
+// An Actions run whose repository was deleted gets plain Forgejo rules, not an error.
+func TestDamastPackagesActionsDeletedRepo(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	task := unittest.AssertExistsAndLoadBean(t, &actions_model.ActionTask{ID: 47})
+	task.RepoID, task.OwnerID, task.IsForkPullRequest = 9999, 5, false
+	task.GenerateToken()
+	require.NoError(t, actions_model.UpdateTask(db.DefaultContext, task, "repo_id", "owner_id", "is_fork_pull_request", "token_hash", "token_salt", "token_last_eight"))
+	MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/generic/ci/1.0/file.bin", bytes.NewReader([]byte("x"))).
+		AddTokenAuth(task.Token), http.StatusUnauthorized)
+}
+
+// pub publishes in three steps (GET upload URL, POST file, GET finalize); repo writers get all of them,
+// with the same per-package checks as single-step uploads.
+func TestDamastPackagesPubUpload(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	require.NoError(t, db.Insert(db.DefaultContext, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
+	archive := func(name string) []byte {
+		pubspec := "name: " + name + "\nversion: 1.0.0\ndescription: d"
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		tw := tar.NewWriter(zw)
+		require.NoError(t, tw.WriteHeader(&tar.Header{Name: "pubspec.yaml", Mode: 0o600, Size: int64(len(pubspec))}))
+		_, _ = tw.Write([]byte(pubspec))
+		require.NoError(t, tw.Close())
+		require.NoError(t, zw.Close())
+		return buf.Bytes()
+	}
+	publish := func(user, name string, status int) *http.Response {
+		t.Helper()
+		resp := MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new").AddBasicAuth(user), NoExpectedStatus)
+		if resp.Code != http.StatusOK {
+			require.Equal(t, status, resp.Code)
+			return resp.Result()
+		}
+		var upload struct {
+			URL string `json:"url"`
+		}
+		DecodeJSON(t, resp, &upload)
+		body := &bytes.Buffer{}
+		w := multipart.NewWriter(body)
+		part, _ := w.CreateFormFile("file", "dummy.tar.gz")
+		_, _ = part.Write(archive(name))
+		require.NoError(t, w.Close())
+		resp = MakeRequest(t, NewRequestWithBody(t, "POST", upload.URL, body).
+			SetHeader("Content-Type", w.FormDataContentType()).AddBasicAuth(user), NoExpectedStatus)
+		if resp.Code != http.StatusNoContent {
+			require.Equal(t, status, resp.Code)
+			return resp.Result()
+		}
+		return MakeRequest(t, NewRequest(t, "GET", resp.Header().Get("Location")).AddBasicAuth(user), status).Result()
+	}
+
+	publish("user4", "repo4", http.StatusOK) // user4 writes repo4
+	p, err := packages_model.GetPackageByName(db.DefaultContext, 5, packages_model.TypePub, "repo4")
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, p.RepoID)
+
+	publish("user4", "unrelated", http.StatusForbidden) // no repository of that name
+	publish("user2", "repo4", http.StatusUnauthorized)  // no repository write at all
+
+	// finalize checks the package like an upload would
+	publish("user5", "secret", http.StatusOK)
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new/finalize/secret/1.0.0").
+		AddBasicAuth("user4"), http.StatusForbidden)
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new/finalize/repo4/1.0.0").
+		AddBasicAuth("user4"), http.StatusOK)
 }
