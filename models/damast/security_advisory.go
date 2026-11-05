@@ -64,6 +64,8 @@ type SecurityAdvisory struct {
 	PublishedUnix timeutil.TimeStamp
 	ClosedUnix    timeutil.TimeStamp
 	WithdrawnUnix timeutil.TimeStamp // OSV "withdrawn"
+	AcceptedUnix  timeutil.TimeStamp // a private report was accepted (GitHub's submission.accepted)
+	PublisherID   int64              `xorm:"NOT NULL DEFAULT 0"` // who published it (GitHub's publisher)
 }
 
 func (SecurityAdvisory) TableName() string { return "damast_security_advisory" }
@@ -331,6 +333,9 @@ func DeleteUserSecurityData(ctx context.Context, userID int64) error {
 		return err
 	}
 	if _, err := e.Table("damast_security_advisory").Where("reporter_id = ?", userID).Update(map[string]any{"reporter_id": user_model.GhostUserID}); err != nil {
+		return err
+	}
+	if _, err := e.Table("damast_security_advisory").Where("publisher_id = ?", userID).Update(map[string]any{"publisher_id": user_model.GhostUserID}); err != nil {
 		return err
 	}
 	if _, err := e.Table("damast_security_advisory").Where("creator_id = ?", userID).Update(map[string]any{"creator_id": user_model.GhostUserID}); err != nil {

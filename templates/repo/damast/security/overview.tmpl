@@ -28,7 +28,7 @@
 		<h4 class="ui top attached header tw-flex tw-items-center">
 			<span class="tw-flex-1">{{svg "octicon-shield"}} {{ctx.Locale.Tr "damast.security.advisories"}}</span>
 			<a class="ui small basic button" href="{{AppSubUrl}}/api/v1/repos/{{.Repository.OwnerName}}/{{.Repository.Name}}/security-advisories/osv">{{ctx.Locale.Tr "damast.security.osv_link"}}</a>
-			{{if .DamastSecurityAdmin}}<a class="ui small primary button" href="{{.RepoLink}}/security/advisories/new">{{ctx.Locale.Tr "damast.security.new_advisory"}}</a>{{end}}
+			{{if and .DamastSecurityAdmin (not .DamastReadOnly)}}<a class="ui small primary button" href="{{.RepoLink}}/security/advisories/new">{{ctx.Locale.Tr "damast.security.new_advisory"}}</a>{{end}}
 		</h4>
 		<div class="ui attached segment" id="damast-security-advisories">
 			{{if .DamastAdvisories}}
@@ -51,7 +51,7 @@
 			{{end}}
 		</div>
 
-		{{if .DamastSecurityAdmin}}
+		{{if and .DamastSecurityAdmin (not .DamastReadOnly)}}
 			<h4 class="ui top attached header">{{ctx.Locale.Tr "damast.security.reporting"}}</h4>
 			<div class="ui attached segment">
 				<form class="ui form" action="{{.RepoLink}}/security/settings" method="post">

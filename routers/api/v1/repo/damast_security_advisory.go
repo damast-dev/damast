@@ -5,7 +5,10 @@ package repo
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"forgejo.org/models/damast"
 	access_model "forgejo.org/models/perm/access"
@@ -14,6 +17,7 @@ import (
 	"forgejo.org/modules/util"
 	"forgejo.org/modules/web"
 	"forgejo.org/services/context"
+	"forgejo.org/services/convert"
 	"forgejo.org/services/damast/security"
 )
 
@@ -134,24 +138,45 @@ func DamastListAdvisories(ctx *context.APIContext) {
 	//   in: query
 	//   description: only advisories in this state (triage, draft, published, closed, withdrawn)
 	//   type: string
+	// - name: page
+	//   in: query
+	//   description: page number of results to return (1-based)
+	//   type: integer
+	// - name: per_page
+	//   in: query
+	//   description: page size of results (GitHub's name; limit works too)
+	//   type: integer
+	// - name: limit
+	//   in: query
+	//   description: page size of results
+	//   type: integer
 	// responses:
 	//   "200":
 	//     "$ref": "#/responses/DamastSecurityAdvisoryList"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
+	//   "422":
+	//     "$ref": "#/responses/validationError"
 	repo := ctx.Repo().Repository
 	doer, p := damastAccess(ctx)
+	state := ctx.FormString("state")
+	if state != "" {
+		if err := security.CheckState(state); err != nil {
+			damastAPIError(ctx, err)
+			return
+		}
+	}
 	list, err := security.Visible(ctx, repo, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
 	}
-	state := ctx.FormString("state")
+	if state != "" {
+		list = slices.DeleteFunc(list, func(a *damast.SecurityAdvisory) bool { return a.State != state })
+	}
+	list = damastPage(ctx, list)
 	res := make([]*security.APIAdvisory, 0, len(list))
 	for _, a := range list {
-		if state != "" && a.State != state {
-			continue
-		}
 		level, err := security.AccessLevel(ctx, repo, a, doer, p)
 		if err != nil {
 			ctx.InternalServerError(err)
@@ -165,6 +190,29 @@ func DamastListAdvisories(ctx *context.APIContext) {
 		res = append(res, r)
 	}
 	ctx.JSON(http.StatusOK, res)
+}
+
+// damastPage cuts one page out of a list that was loaded in full (see the shortcut in security.Visible) and sets
+// X-Total-Count and Link. per_page is GitHub's name for the page size, limit Forgejo's.
+func damastPage[T any](ctx *context.APIContext, list []T) []T {
+	size := ctx.FormInt("per_page")
+	if size == 0 {
+		size = ctx.FormInt("limit")
+	}
+	size = convert.ToCorrectPageSize(size)
+	page := min(max(ctx.FormInt("page"), 1), len(list)+1) // clamped first, so the product cannot overflow
+	ctx.SetTotalCountHeader(int64(len(list)))
+	ctx.SetLinkHeader(len(list), size)
+	start := min((page-1)*size, len(list))
+	return list[start:min(start+size, len(list))]
+}
+
+// DamastReqWritable refuses changes to an archived repository's advisories with 423 Locked, like Forgejo's other
+// archived writes. It runs after the access checks, so people without access still get a 404.
+func DamastReqWritable(ctx *context.APIContext) {
+	if ctx.Repo().Repository.IsArchived {
+		ctx.Error(http.StatusLocked, "RepoArchived", fmt.Errorf("%s is archived", ctx.Repo().Repository.LogString()))
+	}
 }
 
 // DamastCreateAdvisory creates a draft advisory (repository admins).
@@ -378,7 +426,12 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	set(&o.Description, form.Description)
 	set(&o.Severity, form.Severity)
 	set(&o.CVSSVectorString, form.CVSSVectorString)
-	set(&o.CveID, form.CveID)
+	if form.CveID.Set { // null clears the CVE, like on GitHub
+		o.CveID, changed = "", true
+		if form.CveID.Value != nil {
+			o.CveID = *form.CveID.Value
+		}
+	}
 	if form.CWEIDs != nil {
 		o.CWEIDs, changed = *form.CWEIDs, true
 	}
@@ -403,9 +456,9 @@ func DamastUpdateAdvisory(ctx *context.APIContext) {
 	}
 	state := ""
 	if form.State != nil {
-		state = *form.State
-		if state == "" {
-			damastAPIError(ctx, &security.InputError{Key: "damast.security.error.state", Args: []any{a.State, state}})
+		state = strings.ToLower(strings.TrimSpace(*form.State))
+		if err := security.CheckState(state); err != nil { // "" too: for Patch, "" means unchanged
+			damastAPIError(ctx, err)
 			return
 		}
 	}
@@ -525,6 +578,18 @@ func DamastListAdvisoryComments(ctx *context.APIContext) {
 	//   description: id of the advisory (DAMAST-...)
 	//   type: string
 	//   required: true
+	// - name: page
+	//   in: query
+	//   description: page number of results to return (1-based)
+	//   type: integer
+	// - name: per_page
+	//   in: query
+	//   description: page size of results (GitHub's name; limit works too)
+	//   type: integer
+	// - name: limit
+	//   in: query
+	//   description: page size of results
+	//   type: integer
 	// responses:
 	//   "200":
 	//     "$ref": "#/responses/DamastAdvisoryCommentList"
@@ -536,6 +601,7 @@ func DamastListAdvisoryComments(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 		return
 	}
+	comments = damastPage(ctx, comments)
 	ids := make([]int64, 0, len(comments))
 	for _, c := range comments {
 		ids = append(ids, c.PosterID)

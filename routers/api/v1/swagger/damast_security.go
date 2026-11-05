@@ -61,3 +61,10 @@ type swaggerDamastParameterBodies struct {
 	// in:body
 	DamastAdvisoryCommentOption security.APICommentOption
 }
+
+// DamastPrivateReporting
+// swagger:response DamastPrivateReporting
+type swaggerResponseDamastPrivateReporting struct {
+	// in:body
+	Body security.APIPrivateReporting `json:"body"`
+}

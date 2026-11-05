@@ -36,6 +36,7 @@ func damastSecurityCommon(ctx *context.Context) {
 	ctx.Data["Title"] = ctx.Tr("damast.security.title")
 	ctx.Data["PageIsDamastSecurity"] = true
 	ctx.Data["DamastSecurityAdmin"] = security.IsAdmin(&ctx.Repo.Permission)
+	ctx.Data["DamastReadOnly"] = ctx.Repo.Repository.IsArchived
 }
 
 // DamastSecurityReqRead lets only users who may read the repository's code (or admins) in.
@@ -355,7 +356,7 @@ func DamastAdvisoryView(ctx *context.Context) {
 	a, level := damastAdvisory(ctx)
 	ctx.Data["Title"] = a.Title
 	ctx.Data["DamastIsParticipant"] = level >= security.Participant
-	ctx.Data["DamastIsAdvisoryAdmin"] = level >= security.Admin
+	ctx.Data["DamastIsAdvisoryAdmin"] = level >= security.Admin && !ctx.Repo.Repository.IsArchived
 	ctx.Data["DamastDescription"] = damastRenderMarkdown(ctx, a.Description)
 	if a.CVSSVector != "" {
 		score, _ := cvss.Score(a.CVSSVector)
@@ -404,7 +405,7 @@ func DamastAdvisoryView(ctx *context.Context) {
 		for _, c := range comments {
 			rendered = append(rendered, damastComment{
 				Poster: users[c.PosterID], Rendered: damastRenderMarkdown(ctx, c.Content), Comment: c,
-				CanEdit: security.CanEditComment(c, ctx.Doer, level),
+				CanEdit: security.CanEditComment(c, ctx.Doer, level) && !ctx.Repo.Repository.IsArchived,
 			})
 		}
 		ctx.Data["DamastComments"] = rendered

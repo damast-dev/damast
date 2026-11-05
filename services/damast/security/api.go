@@ -5,6 +5,7 @@ package security
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"forgejo.org/models/damast"
@@ -76,9 +77,64 @@ type APIAdvisory struct {
 	CVSS            *APICVSS           `json:"cvss"`
 	CWEIDs          []string           `json:"cwe_ids"`
 	Credits         []APICredit        `json:"credits"`
+	CWEs            []APICWE           `json:"cwes"`
+	CVSSSeverities  APICVSSSeverities  `json:"cvss_severities"`
+	CreditsDetailed []APICreditDetail  `json:"credits_detailed"`
+	Publisher       *api.User          `json:"publisher"`  // null until published
+	Submission      *APISubmission     `json:"submission"` // null unless it started as a private report
 	// Only shown to people who can see the private discussion (reporter, collaborators, admins):
 	Author             *api.User   `json:"author,omitempty"`
 	CollaboratingUsers []*api.User `json:"collaborating_users,omitempty"`
+}
+
+// APICWE is part of the security advisories API. Name is empty: Damast has no copy of the CWE list.
+// swagger:model DamastAdvisoryCWE
+type APICWE struct {
+	CWEID string `json:"cwe_id"`
+	Name  string `json:"name"`
+}
+
+// APICVSSSeverities is part of the security advisories API. Damast scores CVSS 3.1 only, so cvss_v4 is null.
+// swagger:model DamastAdvisoryCVSSSeverities
+type APICVSSSeverities struct {
+	CVSSV3 *APICVSS `json:"cvss_v3"`
+	CVSSV4 *APICVSS `json:"cvss_v4"`
+}
+
+// APICreditDetail is part of the security advisories API. Credits need no invitation, so state is "accepted".
+// swagger:model DamastAdvisoryCreditDetail
+type APICreditDetail struct {
+	User  *api.User `json:"user"`
+	Type  string    `json:"type"`
+	State string    `json:"state"`
+}
+
+// APISubmission is part of the security advisories API.
+// swagger:model DamastAdvisorySubmission
+type APISubmission struct {
+	Accepted bool `json:"accepted"`
+}
+
+// NullString is a JSON string that tells a missing key (Set is false) from null (Set, Value nil).
+// swagger:type string
+type NullString struct {
+	Set   bool
+	Value *string
+}
+
+func (n *NullString) UnmarshalJSON(b []byte) error {
+	n.Set = true
+	if string(b) == "null" {
+		n.Value = nil
+		return nil
+	}
+	return json.Unmarshal(b, &n.Value)
+}
+
+// APIPrivateReporting is the body of GET /private-vulnerability-reporting, as on GitHub.
+// swagger:model DamastPrivateReporting
+type APIPrivateReporting struct {
+	Enabled bool `json:"enabled"`
 }
 
 // APIVulnerabilityOption is one affected product in a create or update request.
@@ -115,7 +171,7 @@ type APIUpdateOption struct {
 	Description        *string                   `json:"description"`
 	Severity           *string                   `json:"severity"`
 	CVSSVectorString   *string                   `json:"cvss_vector_string"`
-	CveID              *string                   `json:"cve_id"`
+	CveID              NullString                `json:"cve_id"` // null clears it, like on GitHub
 	CWEIDs             *[]string                 `json:"cwe_ids"`
 	Vulnerabilities    *[]APIVulnerabilityOption `json:"vulnerabilities"`
 	Credits            *[]APICredit              `json:"credits"`
@@ -172,6 +228,13 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 		WithdrawnAt: apiTime(a.WithdrawnUnix),
 		CWEIDs:      append([]string{}, a.CWEIDs...),
 		Credits:     []APICredit{},
+		CWEs:        make([]APICWE, 0, len(a.CWEIDs)),
+	}
+	for _, c := range a.CWEIDs {
+		r.CWEs = append(r.CWEs, APICWE{CWEID: c})
+	}
+	if a.ReporterID != 0 {
+		r.Submission = &APISubmission{Accepted: a.AcceptedUnix != 0}
 	}
 	if a.IsPublished() {
 		r.OSVURL = apiURL + "/osv"
@@ -183,6 +246,7 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	if a.CVSSVector != "" {
 		score, _ := cvss.Score(a.CVSSVector)
 		r.CVSS = &APICVSS{VectorString: a.CVSSVector, Score: score}
+		r.CVSSSeverities.CVSSV3 = r.CVSS
 	}
 	r.Vulnerabilities = make([]APIVulnerability, 0, len(a.Affected))
 	for _, p := range a.Affected {
@@ -194,10 +258,12 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	if err != nil {
 		return nil, err
 	}
+	r.CreditsDetailed = make([]APICreditDetail, 0, len(credits))
 	for _, c := range credits {
 		r.Credits = append(r.Credits, APICredit{Login: c.User.Name, Type: c.Type})
+		r.CreditsDetailed = append(r.CreditsDetailed, APICreditDetail{User: convert.ToUser(ctx, c.User, doer), Type: c.Type, State: "accepted"})
 	}
-	ids := []int64{a.CreatorID}
+	ids := []int64{a.CreatorID, a.PublisherID}
 	var collaborators []int64
 	if level >= Participant {
 		var err error
@@ -209,6 +275,10 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	users, err := LoadUsers(ctx, ids...)
 	if err != nil {
 		return nil, err
+	}
+	// like credits: everyone sees a publisher with a public profile, participants see any
+	if p := users[a.PublisherID]; a.PublisherID != 0 && !p.IsGhost() && (level >= Participant || p.Visibility.IsPublic()) {
+		r.Publisher = convert.ToUser(ctx, p, doer)
 	}
 	if level >= Participant {
 		r.Author = convert.ToUser(ctx, users[a.CreatorID], doer)

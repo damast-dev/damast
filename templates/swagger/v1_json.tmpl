@@ -14867,6 +14867,110 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/private-vulnerability-reporting": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Check if private vulnerability reporting is enabled (repository admins)",
+        "operationId": "repoGetPrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastPrivateReporting"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Enable private vulnerability reporting (repository admins)",
+        "operationId": "repoEnablePrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/responses/empty"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/responses/error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Disable private vulnerability reporting (repository admins)",
+        "operationId": "repoDisablePrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/responses/empty"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/responses/error"
+          }
+        }
+      }
+    },
     "/repos/{owner}/{repo}/pulls": {
       "get": {
         "produces": [
@@ -17425,6 +17529,24 @@
             "description": "only advisories in this state (triage, draft, published, closed, withdrawn)",
             "name": "state",
             "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page number of results to return (1-based)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results (GitHub's name; limit works too)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results",
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -17433,6 +17555,9 @@
           },
           "404": {
             "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
           }
         }
       },
@@ -17703,6 +17828,24 @@
             "name": "ghsa_id",
             "in": "path",
             "required": true
+          },
+          {
+            "type": "integer",
+            "description": "page number of results to return (1-based)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results (GitHub's name; limit works too)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results",
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -26569,6 +26712,36 @@
       "x-go-name": "APICVSS",
       "x-go-package": "forgejo.org/services/damast/security"
     },
+    "DamastAdvisoryCVSSSeverities": {
+      "type": "object",
+      "title": "APICVSSSeverities is part of the security advisories API. Damast scores CVSS 3.1 only, so cvss_v4 is null.",
+      "properties": {
+        "cvss_v3": {
+          "$ref": "#/definitions/DamastAdvisoryCVSS"
+        },
+        "cvss_v4": {
+          "$ref": "#/definitions/DamastAdvisoryCVSS"
+        }
+      },
+      "x-go-name": "APICVSSSeverities",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCWE": {
+      "type": "object",
+      "title": "APICWE is part of the security advisories API. Name is empty: Damast has no copy of the CWE list.",
+      "properties": {
+        "cwe_id": {
+          "type": "string",
+          "x-go-name": "CWEID"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-name": "APICWE",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
     "DamastAdvisoryComment": {
       "type": "object",
       "title": "APIComment is a comment of the private discussion.",
@@ -26671,6 +26844,25 @@
       "x-go-name": "APICredit",
       "x-go-package": "forgejo.org/services/damast/security"
     },
+    "DamastAdvisoryCreditDetail": {
+      "type": "object",
+      "title": "APICreditDetail is part of the security advisories API. Credits need no invitation, so state is \"accepted\".",
+      "properties": {
+        "state": {
+          "type": "string",
+          "x-go-name": "State"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        },
+        "user": {
+          "$ref": "#/definitions/User"
+        }
+      },
+      "x-go-name": "APICreditDetail",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
     "DamastAdvisoryIdentifier": {
       "type": "object",
       "title": "APIIdentifier is part of the security advisories API.",
@@ -26739,6 +26931,18 @@
         }
       },
       "x-go-name": "APIReportOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisorySubmission": {
+      "type": "object",
+      "title": "APISubmission is part of the security advisories API.",
+      "properties": {
+        "accepted": {
+          "type": "boolean",
+          "x-go-name": "Accepted"
+        }
+      },
+      "x-go-name": "APISubmission",
       "x-go-package": "forgejo.org/services/damast/security"
     },
     "DamastAdvisoryUpdateOption": {
@@ -27055,6 +27259,18 @@
       "x-go-name": "OSVSeverity",
       "x-go-package": "forgejo.org/services/damast/security"
     },
+    "DamastPrivateReporting": {
+      "type": "object",
+      "title": "APIPrivateReporting is the body of GET /private-vulnerability-reporting, as on GitHub.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-go-name": "Enabled"
+        }
+      },
+      "x-go-name": "APIPrivateReporting",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
     "DamastSecurityAdvisory": {
       "type": "object",
       "title": "APIAdvisory is a repository security advisory.",
@@ -27086,6 +27302,13 @@
           },
           "x-go-name": "Credits"
         },
+        "credits_detailed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCreditDetail"
+          },
+          "x-go-name": "CreditsDetailed"
+        },
         "cve_id": {
           "type": "string",
           "x-go-name": "CveID"
@@ -27093,12 +27316,22 @@
         "cvss": {
           "$ref": "#/definitions/DamastAdvisoryCVSS"
         },
+        "cvss_severities": {
+          "$ref": "#/definitions/DamastAdvisoryCVSSSeverities"
+        },
         "cwe_ids": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "x-go-name": "CWEIDs"
+        },
+        "cwes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCWE"
+          },
+          "x-go-name": "CWEs"
         },
         "description": {
           "type": "string",
@@ -27128,6 +27361,9 @@
           "format": "date-time",
           "x-go-name": "PublishedAt"
         },
+        "publisher": {
+          "$ref": "#/definitions/User"
+        },
         "severity": {
           "type": "string",
           "x-go-name": "Severity"
@@ -27135,6 +27371,9 @@
         "state": {
           "type": "string",
           "x-go-name": "State"
+        },
+        "submission": {
+          "$ref": "#/definitions/DamastAdvisorySubmission"
         },
         "summary": {
           "type": "string",
@@ -33116,6 +33355,12 @@
         "items": {
           "$ref": "#/definitions/DamastOSV"
         }
+      }
+    },
+    "DamastPrivateReporting": {
+      "description": "DamastPrivateReporting",
+      "schema": {
+        "$ref": "#/definitions/DamastPrivateReporting"
       }
     },
     "DamastSecurityAdvisory": {

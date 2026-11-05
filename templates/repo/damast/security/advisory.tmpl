@@ -76,7 +76,7 @@
 								{{end}}
 							</div>
 						{{end}}
-						<form class="ui form" action="{{$link}}/comments" method="post">
+						{{if not .DamastReadOnly}}<form class="ui form" action="{{$link}}/comments" method="post">
 							{{template "shared/combomarkdowneditor" (dict
 								"MarkdownPreviewUrl" (print .RepoLink "/markup")
 								"MarkdownPreviewContext" .RepoLink
@@ -84,7 +84,7 @@
 								"TextareaAriaLabel" (ctx.Locale.Tr "damast.security.discussion")
 							)}}
 							<button class="ui primary button tw-mt-2">{{ctx.Locale.Tr "repo.issues.create_comment"}}</button>
-						</form>
+						</form>{{end}}
 					</div>
 				{{end}}
 			</div>
@@ -123,7 +123,7 @@
 					{{if .DamastCredits}}
 						<p><b>{{ctx.Locale.Tr "damast.security.field.credits"}}</b></p>
 						{{range .DamastCredits}}
-							<div>{{ctx.AvatarUtils.Avatar .User 20}} <a href="{{.User.HomeLink}}">{{.User.GetDisplayName}}</a> <span class="text grey">{{.Type}}</span></div>
+							<div>{{ctx.AvatarUtils.Avatar .User 20}} <a href="{{.User.HomeLink}}">{{.User.GetDisplayName}}</a> <span class="text grey">{{ctx.Locale.Tr (print "damast.security.credit_type." .Type)}}</span></div>
 						{{end}}
 					{{end}}
 				</div>

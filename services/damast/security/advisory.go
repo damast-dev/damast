@@ -121,6 +121,9 @@ func SetState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 // setState saves the new state and returns the notification to send once the change is committed.
 func setState(ctx context.Context, repo *repo_model.Repository, doer *user_model.User, a *damast.SecurityAdvisory, state string) (func(), error) {
 	state = strings.ToLower(strings.TrimSpace(state))
+	if err := CheckState(state); err != nil {
+		return nil, err
+	}
 	if state == a.State {
 		return func() {}, nil
 	}
@@ -132,8 +135,13 @@ func setState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 	cols := []string{"state"}
 	switch state {
 	case damast.AdvisoryPublished:
-		a.PublishedUnix = timeutil.TimeStampNow()
-		cols = append(cols, "published_unix")
+		a.PublishedUnix, a.PublisherID = timeutil.TimeStampNow(), doer.ID
+		cols = append(cols, "published_unix", "publisher_id")
+	case damast.AdvisoryDraft:
+		if a.ReporterID != 0 && a.AcceptedUnix == 0 { // a report becomes a draft: accepted (also when reopened)
+			a.AcceptedUnix = timeutil.TimeStampNow()
+			cols = append(cols, "accepted_unix")
+		}
 	case damast.AdvisoryClosed:
 		a.ClosedUnix = timeutil.TimeStampNow()
 		cols = append(cols, "closed_unix")
@@ -149,6 +157,17 @@ func setState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 		return nil, err
 	}
 	return func() { notifyParticipants(ctx, repo, a, doer, stateMessage(old, state), "") }, nil
+}
+
+// States are all advisory states, in lifecycle order.
+var States = []string{damast.AdvisoryTriage, damast.AdvisoryDraft, damast.AdvisoryPublished, damast.AdvisoryClosed, damast.AdvisoryWithdrawn}
+
+// CheckState rejects a state name that does not exist.
+func CheckState(state string) error {
+	if !slices.Contains(States, state) {
+		return invalid("state_unknown", state)
+	}
+	return nil
 }
 
 func stateMessage(old, state string) string {

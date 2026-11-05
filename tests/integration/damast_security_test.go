@@ -84,6 +84,8 @@ type secRoute struct {
 	// throwaway: allowed roles act on a fresh comment instead of the matrix's one (for deletes, which
 	// change something even with an empty payload); the test checks it is gone afterwards
 	throwaway bool
+	// restore undoes what an allowed request changed (a delete with an empty payload), so the data stays the same
+	restore func(t *testing.T, repo *repo_model.Repository)
 }
 
 func (r secRoute) api() bool { return strings.HasPrefix(r.pattern, "/api/") }
@@ -209,6 +211,14 @@ var secRoutes = []secRoute{
 	{
 		method: "DELETE", pattern: "/api/v1/repos/{username}/{reponame}/security-advisories/{ghsa_id}/comments/{comment_id}", allow: secAll(secCommentEditors), ok: 204,
 		throwaway: true,
+	},
+	{method: "GET", pattern: "/api/v1/repos/{username}/{reponame}/private-vulnerability-reporting", allow: secAll(secAdmins), ok: 200},
+	{method: "PUT", pattern: "/api/v1/repos/{username}/{reponame}/private-vulnerability-reporting", allow: secAll(secAdmins), ok: 204}, // already on
+	{
+		method: "DELETE", pattern: "/api/v1/repos/{username}/{reponame}/private-vulnerability-reporting", allow: secAll(secAdmins), ok: 204,
+		restore: func(t *testing.T, repo *repo_model.Repository) {
+			require.NoError(t, damast.SetPrivateReporting(db.DefaultContext, repo.ID, true))
+		},
 	},
 }
 
@@ -401,6 +411,9 @@ func TestDamastSecurityMatrix(t *testing.T) {
 					name := fmt.Sprintf("private=%v %s %s state=%s role=%s", private, r.method, r.pattern, state, role)
 					assert.Equal(t, want, resp.Code, name)
 					e.assertNoLeak(t, name, p, resp.Body.String(), role)
+					if r.restore != nil && !denied {
+						r.restore(t, repo)
+					}
 					if r.throwaway && !denied {
 						_, err := damast.GetAdvisoryComment(db.DefaultContext, a.ID, commentID)
 						assert.ErrorIs(t, err, util.ErrNotExist, "%s: the comment is not deleted", name)
@@ -502,7 +515,7 @@ func TestDamastSecurityRoutesCovered(t *testing.T) {
 	got := map[string]bool{}
 	require.NoError(t, chi.Walk(testWebRoutes.R, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(strings.ReplaceAll(route, "/*/", "/"), "/")
-		if method != "HEAD" && strings.Contains(route, "{reponame}/security") {
+		if method != "HEAD" && (strings.Contains(route, "{reponame}/security") || strings.Contains(route, "{reponame}/private-vulnerability-reporting")) {
 			got[method+" "+route] = true
 		}
 		return nil
