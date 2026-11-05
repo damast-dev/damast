@@ -1835,6 +1835,8 @@ func registerRoutes(m *web.Route) {
 
 	m.Get("/{username}/{reponame}/lastcommit/*", ignSignIn, context.RepoAssignment, context.UnitTypes(), context.RepoRefByType(context.RepoRefCommit), reqRepoCodeReader, repo.LastCommit)
 
+	registerDamastSecurityRoutes(m) // DAMAST: security advisories
+
 	m.Group("/{username}/{reponame}", func() {
 		if !setting.Repository.DisableStars {
 			m.Get("/stars", context.RepoRef(), repo.Stars)

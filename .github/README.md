@@ -48,6 +48,21 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
 
+### Security advisories and private vulnerability reports
+
+**On Forgejo:** there is no private channel. Someone who finds a vulnerability opens a public issue, or hunts for an e-mail address. Maintainers have nowhere to prepare a fix in private, and nothing machine-readable to publish when it's out.
+
+**On Damast:** every repository has a **Security** tab, like on GitHub.
+
+- **Security policy.** Damast shows your `SECURITY.md`, from `.forgejo/`, `.gitea/`, `.github/`, the root or `docs/`.
+- **Private vulnerability reporting.** Switch it on in the Security tab, and anyone who can read the repository can report a vulnerability privately. Repository admins get an e-mail. A report can be accepted as a draft advisory or closed. To keep one account from flooding you, a reporter can have at most 3 open reports per repository and 10 reports a day.
+- **Security advisories.** Admins write drafts with severity, a CVSS 3.1 vector (the score is computed), CWE and CVE IDs, affected packages with vulnerable and patched versions, and credits. They discuss them in a private thread with the reporter and with people they add as collaborators, then publish or close them.
+- **OSV.** Published advisories are served as [OSV 1.6](https://ossf.github.io/osv-schema/) JSON, one by one and as a list per repository, so scanners can read them. Advisory IDs look like `DAMAST-7h2c-9xq4-m5vw`: random, so they never change when a repository is renamed or transferred, and they don't tell anyone how many private advisories exist.
+- **Private means private.** Until an advisory is published, only repository admins (including org owners and admin teams), site admins, the reporter and its collaborators can see it. Everyone else gets a `404`, on every page and API route. Drafts never show up in feeds, notifications, search, issue counters, webhooks or a reporter's profile, and mentioning someone in a draft doesn't notify them. The discussion stays private after publishing. In a private repository, even published advisories are only for people who can read it.
+- **API.** `/api/v1/repos/{owner}/{repo}/security-advisories` follows GitHub's REST API for repository advisories (list, create, update with `state` and `collaborating_users`, `/reports`), plus `/osv` and `/comments`. [`mast`](https://github.com/damast-dev/mast) has `mast security` and `mast advisory` commands for it.
+
+Not yet: file attachments in advisories, temporary private forks, requesting a CVE.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -94,6 +109,16 @@ What you lose:
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
+| Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
+
+Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
+
+```sh
+curl -H "Authorization: token $TOKEN" \
+  https://git.example.com/api/v1/repos/OWNER/REPO/security-advisories/osv > OWNER-REPO-advisories.osv.json
+# or, for every advisory you can see, including drafts, in Damast's own format:
+mast advisory list --repo OWNER/REPO --json > OWNER-REPO-advisories.json
+```
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
 
@@ -118,12 +143,14 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
 - Damast's own name and logo
+- Security tab: security policy, private vulnerability reporting, repository security advisories, OSV export
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 
 **Next**
 - Co-authors in the contribution graph and on profiles, so pairing counts there too
 - An automated test on every Forgejo sync: switch a real instance to Damast and back, and check that Forgejo starts cleanly
 - [`mast`](https://github.com/damast-dev/mast) commands for Damast's features, starting with packages
+- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data
 
 **Your idea?** What do you miss from GitHub? [Open an issue](https://github.com/damast-dev/damast/issues/new) and tell us what your team trips over.
 

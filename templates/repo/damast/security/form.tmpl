@@ -1,0 +1,89 @@
+{{/* DAMAST: form for a new or edited advisory and for a private vulnerability report. Strings: options/locale_damast. */}}
+{{template "base/head" .}}
+{{$f := .DamastForm}}
+{{$mode := .DamastFormMode}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository damast-security">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+		<h2>{{ctx.Locale.Tr (print "damast.security.form." $mode "_title")}}</h2>
+		{{if eq $mode "report"}}<p class="help">{{ctx.Locale.Tr "damast.security.form.report_help"}}</p>{{end}}
+		<form class="ui form" id="damast-advisory-form" method="post">
+			<div class="required field">
+				<label for="damast-title">{{ctx.Locale.Tr "damast.security.field.title"}}</label>
+				<input id="damast-title" name="title" value="{{$f.Title}}" maxlength="255" required>
+			</div>
+			<div class="required field">
+				<label>{{ctx.Locale.Tr "damast.security.field.description"}}</label>
+				{{template "shared/combomarkdowneditor" (dict
+					"MarkdownPreviewUrl" (print .RepoLink "/markup")
+					"MarkdownPreviewContext" .RepoLink
+					"TextareaName" "description"
+					"TextareaContent" $f.Description
+					"TextareaAriaLabel" (ctx.Locale.Tr "damast.security.field.description")
+				)}}
+			</div>
+
+			<h4 class="ui dividing header">{{ctx.Locale.Tr "damast.security.field.affected"}}</h4>
+			<p class="help">{{ctx.Locale.Tr "damast.security.field.affected_help"}}</p>
+			{{range .DamastAffectedRows}}
+				{{$row := .}}
+				<div class="four fields damast-affected-row">
+					<div class="field">
+						<label>{{ctx.Locale.Tr "damast.security.field.ecosystem"}}</label>
+						<select class="ui dropdown" name="ecosystem">
+							{{range $.DamastEcosystems}}<option value="{{.}}" {{if eq . $row.Ecosystem}}selected{{end}}>{{.}}</option>{{end}}
+						</select>
+					</div>
+					<div class="field">
+						<label>{{ctx.Locale.Tr "damast.security.field.package"}}</label>
+						<input name="package" value="{{.Package}}" placeholder="example-package">
+					</div>
+					<div class="field">
+						<label>{{ctx.Locale.Tr "damast.security.field.vulnerable"}}</label>
+						<input name="vulnerable" value="{{.VulnerableRange}}" placeholder=">= 1.0, &lt; 1.4.2">
+					</div>
+					<div class="field">
+						<label>{{ctx.Locale.Tr "damast.security.field.patched"}}</label>
+						<input name="patched" value="{{.Patched}}" placeholder="1.4.2">
+					</div>
+				</div>
+			{{end}}
+
+			<h4 class="ui dividing header">{{ctx.Locale.Tr "damast.security.field.severity"}}</h4>
+			<div class="two fields">
+				<div class="field">
+					<label for="damast-severity">{{ctx.Locale.Tr "damast.security.field.severity"}}</label>
+					<select id="damast-severity" class="ui dropdown" name="severity">
+						{{range .DamastSeverities}}<option value="{{.}}" {{if eq . $f.Severity}}selected{{end}}>{{ctx.Locale.Tr (print "damast.security.severity." .)}}</option>{{end}}
+					</select>
+				</div>
+				<div class="field">
+					<label for="damast-cvss">{{ctx.Locale.Tr "damast.security.field.cvss"}}</label>
+					<input id="damast-cvss" name="cvss_vector" value="{{$f.CVSSVector}}" placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H">
+					<p class="help">{{ctx.Locale.Tr "damast.security.field.cvss_help"}}</p>
+				</div>
+			</div>
+			<div class="field">
+				<label for="damast-cwe">{{ctx.Locale.Tr "damast.security.field.cwe"}}</label>
+				<input id="damast-cwe" name="cwe_ids" value="{{$f.CWEs}}" placeholder="CWE-79, CWE-89">
+				<p class="help">{{ctx.Locale.Tr "damast.security.field.cwe_help"}}</p>
+			</div>
+			{{if ne $mode "report"}}
+				<div class="two fields">
+					<div class="field">
+						<label for="damast-cve">{{ctx.Locale.Tr "damast.security.field.cve"}}</label>
+						<input id="damast-cve" name="cve_id" value="{{$f.CVEID}}" placeholder="CVE-2026-12345">
+					</div>
+					<div class="field">
+						<label for="damast-credits">{{ctx.Locale.Tr "damast.security.field.credits"}}</label>
+						<input id="damast-credits" name="credits" value="{{$f.Credits}}" placeholder="alice, bob:remediation_developer">
+						<p class="help">{{ctx.Locale.Tr "damast.security.field.credits_help"}}</p>
+					</div>
+				</div>
+			{{end}}
+			<button class="ui primary button" id="damast-advisory-submit">{{ctx.Locale.Tr (print "damast.security.form." $mode "_submit")}}</button>
+		</form>
+	</div>
+</div>
+{{template "base/footer" .}}

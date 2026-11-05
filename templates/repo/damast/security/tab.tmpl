@@ -1,0 +1,6 @@
+{{/* DAMAST: Security tab in the repository header. Strings: options/locale_damast. */}}
+{{if or (.Permission.CanRead $.UnitTypeCode) .Permission.IsAdmin}}
+	<a class="{{if .PageIsDamastSecurity}}active {{end}}item" href="{{.RepoLink}}/security">
+		{{svg "octicon-shield"}} {{ctx.Locale.Tr "damast.security.title"}}
+	</a>
+{{end}}

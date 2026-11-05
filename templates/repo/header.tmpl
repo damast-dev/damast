@@ -178,6 +178,8 @@
 					</a>
 				{{end}}
 
+				{{template "repo/damast/security/tab" .}}{{/* DAMAST: */}}
+
 				{{template "custom/extra_tabs" .}}
 
 				{{if and RepoFlagsEnabled .SignedUser.IsAdmin}}

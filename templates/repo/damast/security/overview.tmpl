@@ -1,0 +1,71 @@
+{{/* DAMAST: Security tab. Strings: options/locale_damast. */}}
+{{template "base/head" .}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository damast-security">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+
+		<h4 class="ui top attached header">
+			{{svg "octicon-law"}} {{ctx.Locale.Tr "damast.security.policy"}}
+			{{if .DamastPolicyPath}}<a class="tw-ml-auto tw-font-normal" href="{{.DamastPolicyLink}}">{{.DamastPolicyPath}}</a>{{end}}
+		</h4>
+		<div class="ui attached segment" id="damast-security-policy">
+			{{if .DamastPolicyPath}}
+				<div class="markup">{{.DamastPolicy}}</div>
+			{{else}}
+				<p>{{ctx.Locale.Tr "damast.security.policy_none"}}</p>
+				{{if .DamastSecurityAdmin}}<p class="help">{{ctx.Locale.Tr "damast.security.policy_hint"}}</p>{{end}}
+			{{end}}
+		</div>
+
+		{{if .DamastCanReport}}
+			<div class="ui info message tw-flex tw-items-center" id="damast-security-report">
+				<span class="tw-flex-1">{{ctx.Locale.Tr "damast.security.reporting_on_hint"}}</span>
+				<a class="ui primary small button" href="{{.RepoLink}}/security/report">{{ctx.Locale.Tr "damast.security.report"}}</a>
+			</div>
+		{{end}}
+
+		<h4 class="ui top attached header tw-flex tw-items-center">
+			<span class="tw-flex-1">{{svg "octicon-shield"}} {{ctx.Locale.Tr "damast.security.advisories"}}</span>
+			<a class="ui small basic button" href="{{AppSubUrl}}/api/v1/repos/{{.Repository.OwnerName}}/{{.Repository.Name}}/security-advisories/osv">{{ctx.Locale.Tr "damast.security.osv_link"}}</a>
+			{{if .DamastSecurityAdmin}}<a class="ui small primary button" href="{{.RepoLink}}/security/advisories/new">{{ctx.Locale.Tr "damast.security.new_advisory"}}</a>{{end}}
+		</h4>
+		<div class="ui attached segment" id="damast-security-advisories">
+			{{if .DamastAdvisories}}
+				<div class="flex-list">
+					{{range .DamastAdvisories}}
+						<div class="flex-item">
+							<div class="flex-item-main">
+								<a class="flex-item-title" href="{{$.RepoLink}}/security/advisories/{{.AdvisoryID}}">{{.Title}}</a>
+								<div class="flex-item-body">
+									<span class="text grey">{{.AdvisoryID}}</span>
+									{{if .PublishedUnix}} · {{DateUtils.TimeSince .PublishedUnix}}{{else}} · {{DateUtils.TimeSince .CreatedUnix}}{{end}}
+								</div>
+							</div>
+							<div class="flex-item-trailing">{{template "repo/damast/security/labels" .}}</div>
+						</div>
+					{{end}}
+				</div>
+			{{else}}
+				<p>{{ctx.Locale.Tr "damast.security.advisories_none"}}</p>
+			{{end}}
+		</div>
+
+		{{if .DamastSecurityAdmin}}
+			<h4 class="ui top attached header">{{ctx.Locale.Tr "damast.security.reporting"}}</h4>
+			<div class="ui attached segment">
+				<form class="ui form" action="{{.RepoLink}}/security/settings" method="post">
+					<div class="field">
+						<div class="ui checkbox">
+							<input id="damast-private-reporting" name="private_reporting" type="checkbox" {{if .DamastReportingEnabled}}checked{{end}}>
+							<label for="damast-private-reporting">{{ctx.Locale.Tr "damast.security.reporting_enable"}}</label>
+						</div>
+						<p class="help">{{ctx.Locale.Tr "damast.security.reporting_help"}}</p>
+					</div>
+					<button class="ui primary button">{{ctx.Locale.Tr "save"}}</button>
+				</form>
+			</div>
+		{{end}}
+	</div>
+</div>
+{{template "base/footer" .}}
