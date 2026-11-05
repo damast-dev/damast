@@ -221,9 +221,9 @@ func TestDamastTreeViewPaths(t *testing.T) {
 		user2 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 2})
 		repo := forgery.CreateRepository(t, user2, &forgery.CreateRepositoryOptions{
 			Files: forgery.MapFS{
-				"src/a.go":                      forgery.MapFile("x"),
+				"src/a.go":                       forgery.MapFile("x"),
 				`<img src=x onerror=alert(1)>"'`: forgery.MapFile("x"),
-				"out":                           forgery.MapSymlink("../../../etc"),
+				"out":                            forgery.MapSymlink("../../../etc"),
 			},
 		})
 		base := "/" + repo.FullName() + "/tree-view/branch/main"
