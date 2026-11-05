@@ -6,11 +6,13 @@ package damast
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"math/big"
 	"time"
 
 	"forgejo.org/models/db"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/setting"
 	"forgejo.org/modules/timeutil"
 	"forgejo.org/modules/util"
 
@@ -174,6 +176,20 @@ func UpdateAdvisoryState(ctx context.Context, a *SecurityAdvisory, old string, c
 	return n == 1, err
 }
 
+// LockReporter holds a row lock on the user until the transaction ends, so that counting a reporter's reports and
+// inserting a new one cannot interleave with another request of the same reporter. It only reads the row.
+// SQLite needs no lock: Forgejo opens its transactions IMMEDIATE, which locks the whole database for writing.
+func LockReporter(ctx context.Context, userID int64) error {
+	if !db.InTransaction(ctx) {
+		return errors.New("LockReporter needs a transaction")
+	}
+	if setting.Database.Type.IsSQLite3() {
+		return nil
+	}
+	_, err := db.GetEngine(ctx).ID(userID).Cols("id").ForUpdate().Get(new(user_model.User))
+	return err
+}
+
 // CountReports counts the reports of a user, optionally only in one repository and state and since a time.
 func CountReports(ctx context.Context, reporterID, repoID int64, state string, since time.Time) (int64, error) {
 	cond := builder.Eq{"reporter_id": reporterID}
@@ -289,6 +305,21 @@ func DeleteRepoSecurityData(ctx context.Context, repoID int64) error {
 	}
 	_, err := e.ID(repoID).Delete(new(SecuritySetting))
 	return err
+}
+
+// DeleteAdvisory removes an advisory with its comments and collaborators.
+func DeleteAdvisory(ctx context.Context, id int64) error {
+	return db.WithTx(ctx, func(ctx context.Context) error {
+		e := db.GetEngine(ctx)
+		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryComment)); err != nil {
+			return err
+		}
+		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryCollaborator)); err != nil {
+			return err
+		}
+		_, err := e.ID(id).Delete(new(SecurityAdvisory))
+		return err
+	})
 }
 
 // DeleteUserSecurityData runs when a user is deleted: their reports and comments stay and show the ghost

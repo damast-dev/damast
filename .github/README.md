@@ -150,7 +150,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - Co-authors in the contribution graph and on profiles, so pairing counts there too
 - An automated test on every Forgejo sync: switch a real instance to Damast and back, and check that Forgejo starts cleanly
 - [`mast`](https://github.com/damast-dev/mast) commands for Damast's features, starting with packages
-- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data
+- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data, credits the credited user accepts first (as on GitHub; today only users with a public profile can be credited)
 
 **Your idea?** What do you miss from GitHub? [Open an issue](https://github.com/damast-dev/damast/issues/new) and tell us what your team trips over.
 

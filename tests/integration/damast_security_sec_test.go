@@ -4,21 +4,177 @@
 package integration
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"sync"
 	"testing"
 
 	"forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	"forgejo.org/models/unittest"
+	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/structs"
 	"forgejo.org/modules/test"
 	"forgejo.org/services/damast/security"
 	"forgejo.org/services/mailer"
+	user_service "forgejo.org/services/user"
 	"forgejo.org/tests"
 	"forgejo.org/tests/forgery"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Blocking a user ends their access as reporter or advisory collaborator, as it ends a repository collaboration:
+// 404 on the advisory, no comments, no mail. The admins still see who reported it.
+func TestDamastSecurityBlockedParticipant(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	ctx := db.DefaultContext
+	var box secMailbox
+	defer box.mock()()
+	owner := forgery.CreateUser(t, nil)
+	reporter := forgery.CreateUser(t, nil)
+	collaborator := forgery.CreateUser(t, nil)
+	repo := forgery.CreateRepository(t, owner, nil)
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	a, err := security.Report(ctx, repo, reporter, &security.Input{Title: "blocked", Description: "BLOCKSECRET", Severity: "low"})
+	require.NoError(t, err)
+	require.NoError(t, security.AddCollaborator(ctx, repo, owner, a, collaborator))
+	link := fmt.Sprintf("/%s/security/advisories/%s", repo.FullName(), a.AdvisoryID)
+	api := fmt.Sprintf("/api/v1/repos/%s/security-advisories/%s", repo.FullName(), a.AdvisoryID)
+	for _, u := range []*user_model.User{reporter, collaborator} {
+		loginUser(t, u.Name).MakeRequest(t, NewRequest(t, "GET", link), http.StatusOK)
+		require.NoError(t, user_service.BlockUser(ctx, owner.ID, u.ID))
+	}
+	box.take()
+
+	for _, u := range []*user_model.User{reporter, collaborator} {
+		session := loginUser(t, u.Name)
+		session.MakeRequest(t, NewRequest(t, "GET", link), http.StatusNotFound)
+		session.MakeRequest(t, NewRequestWithValues(t, "POST", link+"/comments", map[string]string{"content": "still here"}), http.StatusNotFound)
+		token := forgery.CreateAccessToken(t, u, nil).Token
+		MakeRequest(t, NewRequest(t, "GET", api).AddTokenAuth(token), http.StatusNotFound)
+		list := MakeRequest(t, NewRequest(t, "GET", "/api/v1/repos/"+repo.FullName()+"/security-advisories").AddTokenAuth(token), http.StatusOK).Body.String()
+		assert.NotContains(t, list, a.AdvisoryID)
+	}
+	_, err = security.AddComment(ctx, repo, owner, a, "update from the maintainer")
+	require.NoError(t, err)
+	assert.Empty(t, box.take(reporter, collaborator))
+
+	page := loginUser(t, owner.Name).MakeRequest(t, NewRequest(t, "GET", link), http.StatusOK).Body.String()
+	assert.Contains(t, page, reporter.Name)
+}
+
+// Only users with a public profile can be credited, and a credited user whose profile later stops being public
+// disappears from every public view of the advisory.
+func TestDamastSecurityCreditsPublicOnly(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	defer test.MockVariableValue(&mailer.SendAsync, func(...*mailer.Message) {})()
+	ctx := db.DefaultContext
+	owner := forgery.CreateUser(t, nil)
+	hidden := forgery.CreateUser(t, nil)
+	later := forgery.CreateUser(t, nil)
+	setVisibility := func(u *user_model.User, v structs.VisibleType) {
+		_, err := db.GetEngine(ctx).ID(u.ID).Cols("visibility").Update(&user_model.User{Visibility: v})
+		require.NoError(t, err)
+	}
+	setVisibility(hidden, structs.VisibleTypePrivate)
+	repo := forgery.CreateRepository(t, owner, nil)
+	token := forgery.CreateAccessToken(t, owner, nil).Token
+	base := "/api/v1/repos/" + repo.FullName() + "/security-advisories"
+	body := func(login string) map[string]any {
+		return map[string]any{"summary": "credits", "description": "d", "severity": "low", "credits": []map[string]string{{"login": login}}}
+	}
+
+	resp := MakeRequest(t, NewRequestWithJSON(t, "POST", base, body(hidden.Name)).AddTokenAuth(token), http.StatusUnprocessableEntity)
+	assert.Contains(t, resp.Body.String(), hidden.Name)
+	page := loginUser(t, owner.Name).MakeRequest(t, NewRequestWithURLValues(t, "POST", "/"+repo.FullName()+"/security/advisories/new", url.Values{
+		"title": {"credits"}, "description": {"d"}, "severity": {"low"}, "credits": {hidden.Name},
+	}), http.StatusOK).Body.String()
+	assert.Contains(t, page, "cannot be credited")
+	assert.Equal(t, 0, unittest.GetCount(t, &damast.SecurityAdvisory{RepoID: repo.ID}))
+
+	var created security.APIAdvisory
+	DecodeJSON(t, MakeRequest(t, NewRequestWithJSON(t, "POST", base, body(later.Name)).AddTokenAuth(token), http.StatusCreated), &created)
+	MakeRequest(t, NewRequestWithJSON(t, "PATCH", base+"/"+created.GhsaID, map[string]any{"state": "published"}).AddTokenAuth(token), http.StatusOK)
+	setVisibility(later, structs.VisibleTypeLimited)
+	for _, path := range []string{base + "/" + created.GhsaID, base + "/" + created.GhsaID + "/osv", base + "/osv"} {
+		assert.NotContains(t, MakeRequest(t, NewRequest(t, "GET", path), http.StatusOK).Body.String(), later.Name, path)
+	}
+	assert.NotContains(t, MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/advisories/"+created.GhsaID), http.StatusOK).Body.String(), later.Name)
+	// editing other fields still works and drops the hidden credit instead of failing on it
+	MakeRequest(t, NewRequestWithJSON(t, "PATCH", base+"/"+created.GhsaID, map[string]any{"summary": "renamed"}).AddTokenAuth(token), http.StatusOK)
+}
+
+// Concurrent reports cannot get past the per-repository cap.
+func TestDamastSecurityReportCapConcurrent(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	defer test.MockVariableValue(&mailer.SendAsync, func(...*mailer.Message) {})()
+	ctx := db.DefaultContext
+	owner := forgery.CreateUser(t, nil)
+	reporter := forgery.CreateUser(t, nil)
+	repo := forgery.CreateRepository(t, owner, nil)
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var ok, capped int
+	for i := range 3 * security.MaxOpenReportsPerRepo {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := security.Report(ctx, repo, reporter, &security.Input{Title: fmt.Sprint("race ", i), Description: "d", Severity: "low"})
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				ok++
+			case errors.Is(err, security.ErrTooManyReports):
+				capped++
+			default: // e.g. SQLite's busy timeout under this artificial load; it must not create a report either
+				t.Logf("report: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	assert.Equal(t, security.MaxOpenReportsPerRepo, ok)
+	assert.Positive(t, capped)
+	assert.Equal(t, security.MaxOpenReportsPerRepo, unittest.GetCount(t, &damast.SecurityAdvisory{RepoID: repo.ID}))
+}
+
+// Advisory rows older than their repository belong to an earlier repository with the same id (deleted while the
+// instance ran plain Forgejo). They are never shown and are cleaned up when found.
+func TestDamastSecurityOrphanAdvisory(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	defer test.MockVariableValue(&mailer.SendAsync, func(...*mailer.Message) {})()
+	ctx := db.DefaultContext
+	owner := forgery.CreateUser(t, nil)
+	repo := forgery.CreateRepository(t, owner, nil)
+	orphan, err := security.Create(ctx, repo, owner, &security.Input{Title: "ORPHANTITLE", Description: "d", Severity: "low"})
+	require.NoError(t, err)
+	_, err = security.AddComment(ctx, repo, owner, orphan, "orphan comment")
+	require.NoError(t, err)
+	require.NoError(t, security.SetState(ctx, repo, owner, orphan, damast.AdvisoryPublished))
+	_, err = db.GetEngine(ctx).Exec("UPDATE damast_security_advisory SET created_unix = ? WHERE id = ?", int64(repo.CreatedUnix)-3600, orphan.ID)
+	require.NoError(t, err)
+	fresh, err := security.Create(ctx, repo, owner, &security.Input{Title: "FRESHTITLE", Description: "d", Severity: "low"})
+	require.NoError(t, err)
+
+	session := loginUser(t, owner.Name)
+	session.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/advisories/"+orphan.AdvisoryID), http.StatusNotFound)
+	overview := session.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security"), http.StatusOK).Body.String()
+	assert.NotContains(t, overview, "ORPHANTITLE")
+	assert.Contains(t, overview, "FRESHTITLE")
+	base := "/api/v1/repos/" + repo.FullName() + "/security-advisories"
+	MakeRequest(t, NewRequest(t, "GET", base+"/"+orphan.AdvisoryID), http.StatusNotFound)
+	assert.NotContains(t, MakeRequest(t, NewRequest(t, "GET", base+"/osv"), http.StatusOK).Body.String(), "ORPHANTITLE")
+
+	unittest.AssertNotExistsBean(t, &damast.SecurityAdvisory{ID: orphan.ID})
+	unittest.AssertNotExistsBean(t, &damast.AdvisoryComment{AdvisoryID: orphan.ID})
+	unittest.AssertExistsAndLoadBean(t, &damast.SecurityAdvisory{ID: fresh.ID})
+}
 
 // A public-only token is limited to public data. Drafts, reports and private discussions in a public repository
 // are not public, so such a token gets exactly what an anonymous visitor gets, even for the repository's owner.

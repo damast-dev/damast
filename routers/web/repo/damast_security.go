@@ -204,19 +204,13 @@ func damastFormFromAdvisory(ctx *context.Context, a *damast.SecurityAdvisory) (*
 		Title: a.Title, Description: a.Description, Severity: a.Severity, CVSSVector: a.CVSSVector, CVEID: a.CVEID,
 		CWEs: strings.Join(a.CWEIDs, ", "), Affected: append([]damast.AffectedProduct{}, a.Affected...),
 	}
-	ids := make([]int64, 0, len(a.Credits))
-	for _, c := range a.Credits {
-		ids = append(ids, c.UserID)
-	}
-	users, err := security.LoadUsers(ctx, ids...)
+	public, err := security.PublicCredits(ctx, a)
 	if err != nil {
 		return nil, err
 	}
-	credits := make([]string, 0, len(a.Credits))
-	for _, c := range a.Credits {
-		if u := users[c.UserID]; !u.IsGhost() {
-			credits = append(credits, u.Name+":"+c.Type)
-		}
+	credits := make([]string, 0, len(public))
+	for _, c := range public {
+		credits = append(credits, c.User.Name+":"+c.Type)
 	}
 	f.Credits = strings.Join(credits, ", ")
 	return f, nil
@@ -259,10 +253,8 @@ func damastFormFromRequest(ctx *context.Context) (*damastForm, *security.Input, 
 		if login == "" {
 			continue
 		}
-		u, err := user_model.GetUserByName(ctx, login)
-		if user_model.IsErrUserNotExist(err) {
-			return f, in, &security.InputError{Key: "damast.security.error.credit_user", Args: []any{login}}
-		} else if err != nil {
+		u, err := security.CreditUser(ctx, login)
+		if err != nil {
 			return f, in, err
 		}
 		in.Credits = append(in.Credits, damast.Credit{UserID: u.ID, Type: typ})
@@ -357,11 +349,6 @@ type damastComment struct {
 	CanEdit  bool
 }
 
-type damastCredit struct {
-	User *user_model.User
-	Type string
-}
-
 // DamastAdvisoryView shows an advisory. Comments, reporter and collaborators only for participants.
 func DamastAdvisoryView(ctx *context.Context) {
 	damastSecurityCommon(ctx)
@@ -376,9 +363,6 @@ func DamastAdvisoryView(ctx *context.Context) {
 	}
 
 	ids := []int64{a.CreatorID, a.ReporterID}
-	for _, c := range a.Credits {
-		ids = append(ids, c.UserID)
-	}
 	var comments []*damast.AdvisoryComment
 	var collaborators []int64
 	if level >= security.Participant {
@@ -401,13 +385,10 @@ func DamastAdvisoryView(ctx *context.Context) {
 		ctx.ServerError("LoadUsers", err)
 		return
 	}
-	var credits []damastCredit
-	for _, c := range a.Credits {
-		if u := users[c.UserID]; !u.IsGhost() {
-			credits = append(credits, damastCredit{User: u, Type: c.Type})
-		}
+	if ctx.Data["DamastCredits"], err = security.PublicCredits(ctx, a); err != nil {
+		ctx.ServerError("PublicCredits", err)
+		return
 	}
-	ctx.Data["DamastCredits"] = credits
 
 	if level >= security.Participant {
 		ctx.Data["DamastCreator"] = users[a.CreatorID]
