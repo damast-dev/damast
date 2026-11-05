@@ -123,6 +123,30 @@ test.describe('desktop', () => {
   });
 });
 
+test('swaps do not pile up listeners of the replaced content', async ({page, browserName, isMobile}) => {
+  test.skip(browserName !== 'chromium' || isMobile, 'listener count needs the Chrome DevTools protocol');
+  const cdp = await page.context().newCDPSession(page);
+  const bodyClickListeners = async () => {
+    const {result} = await cdp.send('Runtime.evaluate', {expression: 'document.body'});
+    const {listeners} = await cdp.send('DOMDebugger.getEventListeners', {objectId: result.objectId});
+    return listeners.filter((l) => l.type === 'click').length;
+  };
+  await page.goto(`${base}/x/y/z/a.txt`);
+  await expect(page.locator('.branch-dropdown-button')).toBeVisible();
+  const before = await bodyClickListeners();
+  for (const path of ['x/b.txt', 'x/y/a.txt', 'x/b.txt', 'x/y/a.txt']) {
+    await item(page, path).locator('a').click();
+    await expect(page).toHaveURL(`${base}/${path}`);
+    await expect(page.locator('.branch-dropdown-button')).toBeVisible();
+  }
+  expect(await bodyClickListeners()).toBe(before);
+  // the dropdown of the swapped content still opens and closes
+  await page.locator('.branch-dropdown-button').click();
+  await expect(page.locator('.js-branch-tag-selector .scrolling.menu')).toBeVisible();
+  await page.locator('.repo-path').click();
+  await expect(page.locator('.js-branch-tag-selector .scrolling.menu')).toBeHidden();
+});
+
 test.describe('mobile', () => {
   test.skip(({isMobile}) => !isMobile, 'mobile layout');
 

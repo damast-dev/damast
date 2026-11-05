@@ -37,7 +37,7 @@ function isMobile() {
 
 // tree path of a /src/ URL of the current ref, or null for anything else
 export function treePathFromUrl(pathname, repoLink, refSubUrl) {
-  const prefix = decodeURI(`${repoLink}/src/${refSubUrl}`);
+  const prefix = decodeURIComponent(`${repoLink}/src/${refSubUrl}`);
   const decoded = decodeURIComponent(pathname);
   if (decoded === prefix) return '';
   if (!decoded.startsWith(`${prefix}/`)) return null;
@@ -147,6 +147,8 @@ async function navigate(url, push) {
       if (!push) tree?.setCurrent(path);
     }
     window.config.pageData.branchDropdownDataList = [];
+    // unmounted apps release their document listeners, which would otherwise keep the old column alive
+    for (const el of current.querySelectorAll('.js-branch-tag-selector')) el.__vue_app__?.unmount();
     htmx.swap(current, fresh.outerHTML, {swapStyle: 'outerHTML', swapDelay: 0, settleDelay: 0}, {title: doc.title});
     await initSwappedContent(document.querySelector(contentSelector));
     if (push) {
