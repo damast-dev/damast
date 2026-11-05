@@ -7,12 +7,14 @@
 // doer may write to some repository of the owner. Every package create/upload path then calls OnWrite inside its
 // transaction, where the package is known, and OnWrite rejects the request unless the doer may write to the
 // package's repository. Without a Grant, OnWrite only auto-links new packages (plain Forgejo permissions apply).
+// A Grant creates new package names only where the owner allows it and GitHub has the registry (mayCreate).
 package packages
 
 import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 
@@ -256,6 +258,16 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 		return damast.SetInheritRepoAccess(ctx, p.ID, true)
 	}
 
+	if g != nil {
+		ok, err := mayCreate(ctx, p)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return g.deny()
+		}
+	}
+
 	repo, err := targetRepo(ctx, p, g, doer, metadata)
 	if err != nil {
 		return err
@@ -278,6 +290,23 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 	}
 	log.Info("Damast: package %d linked to repository %s", p.ID, repo.FullName())
 	return damast.SetInheritRepoAccess(ctx, p.ID, true)
+}
+
+// NewNameTypes are the registries where repository writers and Actions runs may create new package names, if
+// the owner allows it: the ones GitHub Packages has (container, npm, Maven, NuGet, RubyGems) plus generic.
+// GitHub has no PyPI, Cargo, Debian, ... registry; there, and in every registry with one signed index per
+// owner, a new name stays an owner decision as in Forgejo.
+var NewNameTypes = []packages_model.Type{
+	packages_model.TypeContainer, packages_model.TypeNpm, packages_model.TypeMaven,
+	packages_model.TypeNuGet, packages_model.TypeRubyGems, packages_model.TypeGeneric,
+}
+
+// mayCreate reports whether provisional (repository) write may create package p.
+func mayCreate(ctx context.Context, p *packages_model.Package) (bool, error) {
+	if !slices.Contains(NewNameTypes, p.Type) {
+		return false, nil
+	}
+	return damast.RepoWritersMayCreatePackages(ctx, p.OwnerID)
 }
 
 // OnWriteVersion is OnWrite for paths that add files to an existing version.

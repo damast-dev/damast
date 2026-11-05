@@ -7,5 +7,10 @@
 	"damast.packages.repo_access": "Repository access",
 	"damast.packages.inherit": "Inherit access from the linked repository",
 	"damast.packages.inherit_saved": "Package access settings updated.",
-	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions."
+	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.",
+	"damast.packages.new_packages": "Who may create new packages",
+	"damast.packages.new_packages_owners": "Only people who can publish packages for this owner (default)",
+	"damast.packages.new_packages_repo_writers": "Also repository writers and Actions workflows, in container, npm, Maven, NuGet, RubyGems and generic registries",
+	"damast.packages.new_packages_help": "A new package name is claimed for everyone, so by default only owners create one. Writers of a linked repository can always publish new versions of its packages. Other registries, such as Debian, RPM, PyPI or Cargo, keep new names for owners because GitHub has no such registry and some publish one signed index per owner.",
+	"damast.packages.new_packages_saved": "Package creation setting saved."
 }

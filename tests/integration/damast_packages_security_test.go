@@ -20,6 +20,7 @@ import (
 
 	actions_model "forgejo.org/models/actions"
 	auth_model "forgejo.org/models/auth"
+	"forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	packages_model "forgejo.org/models/packages"
 	"forgejo.org/models/perm"
@@ -67,6 +68,12 @@ func damastCollaborator(t *testing.T, repoID, userID int64, mode perm.AccessMode
 	require.NoError(t, db.Insert(db.DefaultContext, &access_model.Access{RepoID: repoID, UserID: userID, Mode: mode}))
 }
 
+// damastRepoWritersCreate lets repository writers and Actions runs create new packages of the owner.
+func damastRepoWritersCreate(t *testing.T, ownerID int64) {
+	t.Helper()
+	require.NoError(t, damast.SetRepoWritersMayCreatePackages(db.DefaultContext, ownerID, true))
+}
+
 func damastPutGeneric(t *testing.T, user, name, version string, status int) {
 	t.Helper()
 	u := fmt.Sprintf("/api/packages/user5/generic/%s/%s/file.bin", name, version)
@@ -87,6 +94,7 @@ func damastPutNpm(t *testing.T, user, name, version, repoURL string, status int)
 // Read paths that answer from the database without the package descriptor or file stream.
 func TestDamastPackagesReadOracles(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	damastPrivateOwner(t)
 
 	damastPutGeneric(t, "user4", "repo4", "1.0", http.StatusCreated) // linked to repo4
@@ -132,6 +140,7 @@ func TestDamastPackagesReadOracles(t *testing.T) {
 // repository named in package.json the publisher can write to, and transfers keep the link.
 func TestDamastPackagesForeignRepoLink(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	damastPrivateOwner(t)
 	ctx := db.DefaultContext
 	user4 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 4})
@@ -181,6 +190,7 @@ func TestDamastPackagesForeignRepoLink(t *testing.T) {
 // Forgejo gives prohibited, inactive and 2FA-lacking users no package access; provisional access must not either.
 func TestDamastPackagesBlockedUser(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	require.NoError(t, db.Insert(db.DefaultContext, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 	token := getTokenForLoggedInUser(t, loginUser(t, "user4"), auth_model.AccessTokenScopeWritePackage)
 	put := func(version string, status int) {
@@ -199,6 +209,7 @@ func TestDamastPackagesBlockedUser(t *testing.T) {
 // packages up in lists: npm/PyPI/Maven metadata and the container registry.
 func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	damastPrivateOwner(t)
 
 	// user5 publishes unlinked packages named "secret"; user2 only reads repo4
@@ -306,6 +317,7 @@ func TestDamastPackagesHiddenLooksMissing(t *testing.T) {
 // Forgejo makes archived repositories read-only; publishing through such a repository must stop too.
 func TestDamastPackagesArchivedRepo(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 	damastPutGeneric(t, "user4", "repo4", "1.0", http.StatusCreated)
@@ -327,6 +339,7 @@ func TestDamastPackagesArchivedRepo(t *testing.T) {
 // A public-only token can't reach private repositories elsewhere in Forgejo, so it can't publish through one.
 func TestDamastPackagesPublicOnlyToken(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 	session := loginUser(t, "user4")
@@ -352,9 +365,11 @@ func TestDamastPackagesPublicOnlyToken(t *testing.T) {
 	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/generic/repo4/1.0/file.bin").AddTokenAuth(full), http.StatusOK)
 }
 
-// OPEN FINDING, documents current behaviour: every non-fork Actions run (and every repo writer) can claim any
-// unused package name, also in registries with one signed index per owner. Flip once decided.
-func TestDamastPackagesOpenFindingNameClaim(t *testing.T) {
+// Who may create new package names. By default only owner-level package writers, as in Forgejo: a new name is
+// claimed for the whole owner (and lands in per-owner signed indexes like Debian's). With "repo_writers",
+// repository writers and Actions runs may create names too, but only in registries GitHub Packages has.
+// New versions of a package linked to the repository are always fine.
+func TestDamastPackagesNewNames(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
@@ -363,14 +378,106 @@ func TestDamastPackagesOpenFindingNameClaim(t *testing.T) {
 	task.GenerateToken()
 	require.NoError(t, actions_model.UpdateTask(ctx, task, "repo_id", "owner_id", "is_fork_pull_request", "token_hash", "token_salt", "token_last_eight"))
 
-	// "curl 99" in user5's signed apt repository, published by a workflow of repo4
-	MakeRequest(t, NewRequestWithBody(t, "PUT", "/api/packages/user5/debian/pool/stable/main/upload",
-		createDebianArchive("curl", "99.0", "amd64", "not curl")).AddTokenAuth(task.Token), http.StatusCreated)
-	p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeDebian, "curl")
-	require.NoError(t, err)
-	assert.EqualValues(t, 4, p.RepoID)
-	resp := MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/debian/dists/stable/main/binary-amd64/Packages"), http.StatusOK)
-	assert.Contains(t, resp.Body.String(), "Package: curl")
+	deb := func(auth func(*RequestWrapper) *RequestWrapper, name, version string, status int) {
+		t.Helper()
+		MakeRequest(t, auth(NewRequestWithBody(t, "PUT", "/api/packages/user5/debian/pool/stable/main/upload",
+			createDebianArchive(name, version, "amd64", "x"))), status)
+	}
+	byTask := func(r *RequestWrapper) *RequestWrapper { return r.AddTokenAuth(task.Token) }
+	byOwner := func(r *RequestWrapper) *RequestWrapper { return r.AddBasicAuth("user5") }
+	generic := func(auth func(*RequestWrapper) *RequestWrapper, name string, status int) {
+		t.Helper()
+		MakeRequest(t, auth(NewRequestWithBody(t, "PUT", "/api/packages/user5/generic/"+name+"/1.0/file.bin",
+			bytes.NewReader([]byte("x")))), status)
+	}
+	byWriter := func(r *RequestWrapper) *RequestWrapper { return r.AddBasicAuth("user4") }
+	packagesIndex := func() string {
+		return MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/debian/dists/stable/main/binary-amd64/Packages"), NoExpectedStatus).Body.String()
+	}
+
+	settings := "/api/v1/damast/packages/user5/settings"
+	ownerToken := getUserToken(t, "user5", auth_model.AccessTokenScopeWritePackage)
+	newPackages := func() string {
+		t.Helper()
+		var s struct {
+			NewPackages string `json:"new_packages"`
+		}
+		DecodeJSON(t, MakeRequest(t, NewRequest(t, "GET", settings).AddTokenAuth(ownerToken), http.StatusOK), &s)
+		return s.NewPackages
+	}
+
+	t.Run("default: only owners create names", func(t *testing.T) {
+		assert.Equal(t, "owners", newPackages())
+		deb(byTask, "curl", "99.0", http.StatusForbidden) // "curl 99" in user5's signed apt repository
+		generic(byTask, "ci", http.StatusForbidden)
+		generic(byWriter, "repo4", http.StatusForbidden)
+		_, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeDebian, "curl")
+		require.ErrorIs(t, err, packages_model.ErrPackageNotExist)
+		assert.NotContains(t, packagesIndex(), "Package: curl")
+	})
+
+	t.Run("new versions of a linked package are fine", func(t *testing.T) {
+		deb(byOwner, "repo4", "1.0", http.StatusCreated)
+		p, err := packages_model.GetPackageByName(ctx, 5, packages_model.TypeDebian, "repo4")
+		require.NoError(t, err)
+		require.EqualValues(t, 4, p.RepoID)
+		deb(byTask, "repo4", "2.0", http.StatusCreated)
+		assert.Contains(t, packagesIndex(), "Version: 2.0")
+	})
+
+	t.Run("repo_writers: names in GitHub's registries", func(t *testing.T) {
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", settings, map[string]string{"new_packages": "repo_writers"}).
+			AddTokenAuth(ownerToken), http.StatusOK)
+		assert.Equal(t, "repo_writers", newPackages())
+
+		generic(byTask, "ci", http.StatusCreated)
+		generic(byWriter, "repo4", http.StatusCreated)
+		deb(byTask, "curl", "99.0", http.StatusForbidden) // Debian isn't one of them
+		assert.NotContains(t, packagesIndex(), "Package: curl")
+	})
+
+	t.Run("settings API", func(t *testing.T) {
+		writerToken := getUserToken(t, "user4", auth_model.AccessTokenScopeWritePackage)
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", settings, map[string]string{"new_packages": "owners"}).
+			AddTokenAuth(writerToken), http.StatusForbidden)
+		MakeRequest(t, NewRequest(t, "GET", settings).AddTokenAuth(writerToken), http.StatusForbidden)
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", settings, map[string]string{"new_packages": "everyone"}).
+			AddTokenAuth(ownerToken), http.StatusUnprocessableEntity)
+		readToken := getUserToken(t, "user5", auth_model.AccessTokenScopeReadPackage)
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", settings, map[string]string{"new_packages": "owners"}).
+			AddTokenAuth(readToken), http.StatusForbidden)
+
+		// organizations: org owners (user2 owns org3)
+		orgSettings := "/api/v1/damast/packages/org3/settings"
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", orgSettings, map[string]string{"new_packages": "repo_writers"}).
+			AddTokenAuth(getUserToken(t, "user2", auth_model.AccessTokenScopeWritePackage)), http.StatusOK)
+		allow, err := damast.RepoWritersMayCreatePackages(ctx, 3)
+		require.NoError(t, err)
+		assert.True(t, allow)
+		MakeRequest(t, NewRequestWithJSON(t, "PATCH", orgSettings, map[string]string{"new_packages": "owners"}).
+			AddTokenAuth(ownerToken), http.StatusForbidden)
+	})
+
+	t.Run("settings page", func(t *testing.T) {
+		session := loginUser(t, "user5")
+		doc := NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user/settings/packages"), http.StatusOK).Body)
+		assert.True(t, doc.Find(`#damast-new-packages-repo-writers`).Is("[checked]"))
+		session.MakeRequest(t, NewRequestWithValues(t, "POST", "/user/settings/packages/damast", map[string]string{
+			"new_packages": "owners",
+		}), http.StatusSeeOther)
+		assert.Equal(t, "owners", newPackages())
+		generic(byTask, "ci2", http.StatusForbidden)
+
+		org := loginUser(t, "user2")
+		doc = NewHTMLParser(t, org.MakeRequest(t, NewRequest(t, "GET", "/org/org3/settings/packages"), http.StatusOK).Body)
+		assert.True(t, doc.Find(`#damast-new-packages-repo-writers`).Is("[checked]"))
+		org.MakeRequest(t, NewRequestWithValues(t, "POST", "/org/org3/settings/packages/damast", map[string]string{
+			"new_packages": "owners",
+		}), http.StatusSeeOther)
+		allow, err := damast.RepoWritersMayCreatePackages(ctx, 3)
+		require.NoError(t, err)
+		assert.False(t, allow)
+	})
 }
 
 // Site admins pass reqPackageAccess for every owner; provisional access must not narrow that just because
@@ -389,6 +496,7 @@ func TestDamastPackagesSiteAdmin(t *testing.T) {
 // recomputing repository permissions for each of them multiplies the queries.
 func TestDamastPackagesReadDecidedOncePerRequest(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	damastPrivateOwner(t)
 	damastPutGeneric(t, "user4", "repo4", "1.0", http.StatusCreated)
 	ctx := db.DefaultContext
@@ -432,16 +540,22 @@ func TestDamastPackagesConanPrivateOwner(t *testing.T) {
 		resp := MakeRequest(t, NewRequest(t, "GET", base+"/v1/users/authenticate").AddBasicAuth(user), http.StatusOK)
 		return resp.Body.String()
 	}
-	writer, reader := token("user4"), token("user2")
+	writer, reader, owner := token("user4"), token("user2"), token("user5")
+	damastRepoWritersCreate(t, 5) // still: conan isn't a GitHub registry, so new names stay owner-only
 
+	// the owner creates the name (linked to repo4 by name), the repo writer publishes new versions with
 	// upstream's flows, including their pre-upload GETs that expect 404
+	uploadConanPackageV2(t, base, owner, "repo4", "0.1", "dev", "stable", "rev1", "prev1")
 	uploadConanPackageV1(t, base, writer, "repo4", "1.0", "dev", "stable")
 	uploadConanPackageV2(t, base, writer, "repo4", "2.0", "dev", "stable", "rev1", "prev1")
 	p, err := packages_model.GetPackageByName(db.DefaultContext, 5, packages_model.TypeConan, "repo4")
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, p.RepoID)
+	user5 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 5})
+	damastCollaborator(t, damastRepo(t, user5, "tool", true).ID, 4, perm.AccessModeWrite) // a repo user4 writes, named like the new package
+	MakeRequest(t, NewRequestWithBody(t, "PUT", base+"/v2/conans/tool/1.0/dev/stable/revisions/rev1/files/"+conanfileName,
+		strings.NewReader(buildConanfileContent("tool", "1.0"))).AddTokenAuth(writer), http.StatusForbidden)
 
-	owner := token("user5")
 	uploadConanPackageV2(t, base, owner, "secret", "1.0", "dev", "stable", "rev1", "prev1")
 
 	get := func(tok, path string, status int) string {
@@ -480,8 +594,8 @@ func TestDamastPackagesConanPrivateOwner(t *testing.T) {
 func TestDamastPackagesPubUpload(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 	require.NoError(t, db.Insert(db.DefaultContext, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
-	archive := func(name string) []byte {
-		pubspec := "name: " + name + "\nversion: 1.0.0\ndescription: d"
+	archive := func(name, version string) []byte {
+		pubspec := "name: " + name + "\nversion: " + version + "\ndescription: d"
 		var buf bytes.Buffer
 		zw := gzip.NewWriter(&buf)
 		tw := tar.NewWriter(zw)
@@ -491,7 +605,7 @@ func TestDamastPackagesPubUpload(t *testing.T) {
 		require.NoError(t, zw.Close())
 		return buf.Bytes()
 	}
-	publish := func(user, name string, status int) *http.Response {
+	publish := func(user, name, version string, status int) *http.Response {
 		t.Helper()
 		resp := MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new").AddBasicAuth(user), NoExpectedStatus)
 		if resp.Code != http.StatusOK {
@@ -505,7 +619,7 @@ func TestDamastPackagesPubUpload(t *testing.T) {
 		body := &bytes.Buffer{}
 		w := multipart.NewWriter(body)
 		part, _ := w.CreateFormFile("file", "dummy.tar.gz")
-		_, _ = part.Write(archive(name))
+		_, _ = part.Write(archive(name, version))
 		require.NoError(t, w.Close())
 		resp = MakeRequest(t, NewRequestWithBody(t, "POST", upload.URL, body).
 			SetHeader("Content-Type", w.FormDataContentType()).AddBasicAuth(user), NoExpectedStatus)
@@ -516,18 +630,22 @@ func TestDamastPackagesPubUpload(t *testing.T) {
 		return MakeRequest(t, NewRequest(t, "GET", resp.Header().Get("Location")).AddBasicAuth(user), status).Result()
 	}
 
-	publish("user4", "repo4", http.StatusOK) // user4 writes repo4
+	damastRepoWritersCreate(t, 5)                     // still: pub isn't a GitHub registry, so new names stay owner-only
+	publish("user5", "repo4", "1.0.0", http.StatusOK) // the owner creates the name, linked to repo4
 	p, err := packages_model.GetPackageByName(db.DefaultContext, 5, packages_model.TypePub, "repo4")
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, p.RepoID)
 
-	publish("user4", "unrelated", http.StatusForbidden) // no repository of that name
-	publish("user2", "repo4", http.StatusUnauthorized)  // no repository write at all
+	user5 := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 5})
+	damastCollaborator(t, damastRepo(t, user5, "tool", true).ID, 4, perm.AccessModeWrite)
+	publish("user4", "repo4", "1.0.1", http.StatusOK)           // user4 writes repo4: new versions are fine
+	publish("user4", "tool", "1.0.0", http.StatusForbidden)     // new names are not, even with a repo "tool" user4 writes
+	publish("user2", "repo4", "1.0.2", http.StatusUnauthorized) // no repository write at all
 
 	// finalize checks the package like an upload would
-	publish("user5", "secret", http.StatusOK)
+	publish("user5", "secret", "1.0.0", http.StatusOK)
 	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new/finalize/secret/1.0.0").
 		AddBasicAuth("user4"), http.StatusForbidden)
-	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new/finalize/repo4/1.0.0").
+	MakeRequest(t, NewRequest(t, "GET", "/api/packages/user5/pub/api/packages/versions/new/finalize/repo4/1.0.1").
 		AddBasicAuth("user4"), http.StatusOK)
 }

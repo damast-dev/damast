@@ -2,6 +2,7 @@
 	<div class="user-setting-content">
 		{{template "package/shared/cleanup_rules/list" .}}
 		{{template "package/shared/cargo" .}}
+		{{template "package/shared/damast_owner" .}}{{/* DAMAST: owner package settings */}}
 
 		<h4 class="ui top attached header">
 			{{ctx.Locale.Tr "packages.owner.settings.chef.title"}}
