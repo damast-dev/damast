@@ -1,0 +1,60 @@
+/* Damast-only styles. Loaded last from index.css. */
+
+/* MAST-17: file tree sidebar in the code view (templates/repo/damast/file_tree.tmpl) */
+.damast-file-tree {
+  display: none;
+}
+
+.page-content.repository:has(> .damast-file-tree.is-visible) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.page-content.repository:has(> .damast-file-tree.is-visible) > * {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.page-content.repository > .damast-file-tree.is-visible {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 300px;
+  width: 300px;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow: auto;
+  padding: 0 8px 16px var(--page-margin-x);
+  border-inline-end: 1px solid var(--color-secondary);
+  font-size: 14px;
+}
+
+.page-content.repository > .damast-file-tree.is-visible ~ .ui.container {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: calc(100% - 300px - var(--page-margin-x));
+}
+
+.damast-file-tree-loading {
+  padding: 8px 4px;
+  color: var(--color-text-light-2);
+}
+
+@media (max-width: 767.98px) {
+  .page-content.repository > .damast-file-tree.is-visible {
+    flex: 0 0 calc(100% - 2 * var(--page-margin-x));
+    width: auto;
+    position: static;
+    max-height: 50vh;
+    margin: 0 var(--page-margin-x) 1em;
+    padding: 0 0 8px;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--color-secondary);
+  }
+
+  .page-content.repository > .damast-file-tree.is-visible ~ .ui.container {
+    flex: 0 0 calc(100% - 2 * var(--page-margin-x));
+    max-width: none;
+  }
+}

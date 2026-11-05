@@ -1,18 +1,18 @@
-{{/* DAMAST: repo-bound package access. shortcut: English only, move strings to locale_next when upstreaming. */}}
-<h4 class="ui top attached header">Repository access</h4>
+{{/* DAMAST: repo-bound package access. Strings: options/locale_damast. */}}
+<h4 class="ui top attached header">{{ctx.Locale.Tr "damast.packages.repo_access"}}</h4>
 <div class="ui attached segment">
 	<form class="ui form" action="{{.Link}}" method="post">
 		<input type="hidden" name="action" value="damast_inherit">
 		<div class="field">
 			<div class="ui checkbox">
 				<input id="damast-inherit" name="inherit" type="checkbox" {{if .DamastInheritRepoAccess}}checked{{end}} {{if not .CanWritePackages}}disabled{{end}}>
-				<label for="damast-inherit">Inherit access from the linked repository</label>
+				<label for="damast-inherit">{{ctx.Locale.Tr "damast.packages.inherit"}}</label>
 			</div>
-			<p class="help">People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.</p>
+			<p class="help">{{ctx.Locale.Tr "damast.packages.inherit_help"}}</p>
 		</div>
 		{{if .CanWritePackages}}
 		<div class="field">
-			<button class="ui primary button">Save</button>
+			<button class="ui primary button">{{ctx.Locale.Tr "save"}}</button>
 		</div>
 		{{end}}
 	</form>

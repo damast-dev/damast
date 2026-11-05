@@ -1,0 +1,19 @@
+{
+	"damast.coauthors.and": "and",
+	"damast.coauthors.others": {
+		"one": "%d other",
+		"other": "%d others"
+	},
+	"damast.packages.repo_access": "Repository access",
+	"damast.packages.inherit": "Inherit access from the linked repository",
+	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions.",
+	"damast.file_tree.label": "File tree",
+	"damast.file_tree.files": "Files",
+	"damast.file_tree.loading": "Loading file tree…",
+	"damast.file_tree.load_error": "Could not load the file tree.",
+	"damast.file_tree.show": "Show file tree",
+	"damast.file_tree.hide": "Hide file tree",
+	"damast.file_tree.expand": "Expand folder",
+	"damast.file_tree.collapse": "Collapse folder",
+	"damast.file_tree.more": "%s more…"
+}
