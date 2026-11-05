@@ -50,7 +50,7 @@ func TestDamastCoAuthors(t *testing.T) {
 		authors := doc.doc.Find(".commit-header-row .author .damast-coauthor")
 		assert.Equal(t, 2, authors.Length())
 		names := doc.doc.Find(".commit-header-row .author .damast-author-names").Text()
-		assert.Contains(t, names, "User One")
+		assert.Contains(t, names, "user1") // the account's display name (DEFAULT_SHOW_FULL_NAME is off), not the trailer's "User One"
 		assert.Contains(t, names, "Stranger")
 		assert.Contains(t, names, " and ")
 
@@ -81,7 +81,7 @@ func TestDamastCoAuthors(t *testing.T) {
 			NewBranch: "damast-coauthor-edge",
 			Message: "edge\n\n" +
 				"Co-authored-by: <img src=x onerror=alert(1)> \"q <xss@example.org>\n" +
-				"Co-authored-by: User One <user1@example.com>\n" +
+				"Co-authored-by: Linus Torvalds <user1@example.com>\n" + // linked: shown with the account's name
 				"Co-authored-by: User One Again <user1-2@example.com>\n" + // same account, other email: shown once
 				"Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n" +
 				"Co-authored-by: Not Verified <user2-2@example.com>\n", // unverified email of user2: no link
@@ -101,7 +101,35 @@ func TestDamastCoAuthors(t *testing.T) {
 			assert.Equal(t, 1, stack.Find(`a.damast-coauthor[href="/user1"]`).Length(), link)
 			tip, _ := stack.Find("span.damast-coauthor").First().Attr("data-tooltip-content")
 			assert.Equal(t, `<img src=x onerror=alert(1)> "q <xss@example.org>`, tip, link)
+			tip, _ = stack.Find("a.damast-coauthor").Attr("data-tooltip-content")
+			assert.Equal(t, "user1", tip, link)
+			assert.NotContains(t, doc.doc.Find(".damast-author-names").First().Text(), "Linus", link)
 		}
+		// list mode on the PR commits tab collapses to the translated "N others"
+		assert.Equal(t, "4 others", strings.TrimSpace(doc.doc.Find(".damast-coauthor-others").First().Text()))
+
+		// repo home (latest commit = the mob commit) and the commit graph
+		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1"), http.StatusOK).Body)
+		assert.Equal(t, "+2", strings.TrimSpace(doc.doc.Find("#repo-files-table .damast-coauthor-more").Text()))
+		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/graph"), http.StatusOK).Body)
+		assert.Equal(t, 4, doc.doc.Find("#rev-list li").First().Find(".damast-coauthor").Length())
+
+		// accounts the viewer can't see (private user, private org) render like unknown emails
+		resp, err = files_service.ChangeRepoFiles(git.DefaultContext, repo1, user2, &files_service.ChangeRepoFilesOptions{
+			Files:     []*files_service.ChangeRepoFile{{Operation: "create", TreePath: "damast-private.txt", ContentReader: strings.NewReader("x")}},
+			OldBranch: "master",
+			NewBranch: "damast-coauthor-private",
+			Message:   "private\n\nCo-authored-by: Secret <user31@noreply.example.org>\nCo-authored-by: Hidden Org <privated_org@noreply.example.org>\n",
+		})
+		require.NoError(t, err)
+		privLink := "/user2/repo1/commit/" + resp.Commit.SHA
+		doc = NewHTMLParser(t, emptyTestSession(t).MakeRequest(t, NewRequest(t, "GET", privLink), http.StatusOK).Body)
+		assert.Equal(t, 2, doc.doc.Find(".commit-header-row .damast-coauthor").Length())
+		assert.Equal(t, 0, doc.doc.Find(".commit-header-row a.damast-coauthor").Length())
+		assert.NotContains(t, doc.doc.Find(".commit-header-row .damast-author-names").Text(), "user31")
+		assert.NotContains(t, doc.doc.Find(".commit-header-row .damast-author-names").Text(), "privated_org")
+		doc = NewHTMLParser(t, loginUser(t, "user1").MakeRequest(t, NewRequest(t, "GET", privLink), http.StatusOK).Body) // admin sees them
+		assert.Equal(t, 2, doc.doc.Find(".commit-header-row a.damast-coauthor").Length())
 
 		// commits without trailer render no co-authors
 		doc = NewHTMLParser(t, session.MakeRequest(t, NewRequest(t, "GET", "/user2/repo1/commit/65f1bf27bc3bf70f64657658635e66094edbcb4d"), http.StatusOK).Body)
