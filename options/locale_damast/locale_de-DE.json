@@ -1,0 +1,10 @@
+{
+	"damast.coauthors.and": "und",
+	"damast.coauthors.others": {
+		"one": "%d weitere Person",
+		"other": "%d weitere Personen"
+	},
+	"damast.packages.repo_access": "Repository-Zugriff",
+	"damast.packages.inherit": "Zugriff vom verknüpften Repository übernehmen",
+	"damast.packages.inherit_help": "Personen und Actions-Workflows mit Lesezugriff auf das verknüpfte Repository können dieses Paket herunterladen; mit Schreibzugriff können sie neue Versionen veröffentlichen."
+}
