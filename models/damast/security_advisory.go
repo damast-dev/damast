@@ -167,6 +167,13 @@ func UpdateAdvisory(ctx context.Context, a *SecurityAdvisory, cols ...string) er
 	return err
 }
 
+// UpdateAdvisoryState saves the state columns only if the stored state is still old, so that two concurrent
+// changes cannot both pass the transition check. It reports whether the row was updated.
+func UpdateAdvisoryState(ctx context.Context, a *SecurityAdvisory, old string, cols ...string) (bool, error) {
+	n, err := db.GetEngine(ctx).ID(a.ID).And("state = ?", old).Cols(cols...).Update(a)
+	return n == 1, err
+}
+
 // CountReports counts the reports of a user, optionally only in one repository and state and since a time.
 func CountReports(ctx context.Context, reporterID, repoID int64, state string, since time.Time) (int64, error) {
 	cond := builder.Eq{"reporter_id": reporterID}

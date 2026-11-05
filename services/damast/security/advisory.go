@@ -135,8 +135,11 @@ func setState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 		a.WithdrawnUnix = timeutil.TimeStampNow()
 		cols = append(cols, "withdrawn_unix")
 	}
-	if err := damast.UpdateAdvisory(ctx, a, cols...); err != nil {
+	if ok, err := damast.UpdateAdvisoryState(ctx, a, old, cols...); err != nil || !ok {
 		a.State = old
+		if err == nil { // someone else changed the state since a was loaded
+			err = invalid("state", old, state)
+		}
 		return nil, err
 	}
 	return func() { notifyParticipants(ctx, repo, a, doer, stateMessage(old, state), "") }, nil
