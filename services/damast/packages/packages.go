@@ -101,6 +101,10 @@ func init() {
 	packages_model.DamastCheckRead = CheckRead
 	packages_model.DamastCheckReadFile = OnReadFile
 	packages_model.DamastCheckReadPackageID = checkReadPackageID
+	packages_model.DamastReadGrant = func(ctx context.Context) bool {
+		g := grantFrom(ctx)
+		return g != nil && g.Mode == perm.AccessModeRead
+	}
 }
 
 // CheckRead rejects reads under a provisional read Grant unless the reader may read the package's

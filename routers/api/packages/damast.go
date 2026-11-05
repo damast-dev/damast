@@ -16,15 +16,16 @@ import (
 // Write routes that are not uploads; provisional access never applies to them.
 var damastNonUploadPaths = []string{"/unyank", "/yank", "/-rev/", "/dist-tags/", "/delete"}
 
-// Registries whose read endpoints all work per package (descriptor or file stream), so CheckRead covers
-// them. Registries with owner-wide indexes (debian, rpm, alpine, arch, alt, cargo, composer, helm,
-// rubygems, ...) would leak other packages and keep owner-level read.
-var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true}
+// Registries whose read endpoints all work per package (descriptor, file stream, or per-package lookups
+// that hide what the reader can't see), so CheckRead covers them. Registries with owner-wide indexes
+// (debian, rpm, alpine, arch, alt, cargo, composer, helm, rubygems, ...) would leak other packages and keep
+// owner-level read.
+var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true, "conan": true}
 
 // Read routes that list several packages; provisional read never applies to them. Per-package lists
 // (npm dist-tags, container tags/list) are fine: hidden packages look missing there (GetPackageByName,
 // GetVersionsByPackageName).
-var damastListPaths = []string{"/_catalog", "/-/v1/search"}
+var damastListPaths = []string{"/_catalog", "/-/v1/search", "/conans/search"}
 
 // damastUploadGet reports GET steps of multi-step uploads (pub: ask for an upload URL, finalize). They get
 // provisional write like the upload itself; finalize checks the package like any write to an existing one.

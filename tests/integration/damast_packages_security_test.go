@@ -421,6 +421,60 @@ func TestDamastPackagesActionsDeletedRepo(t *testing.T) {
 		AddTokenAuth(task.Token), http.StatusUnauthorized)
 }
 
+// conan checks the server before it uploads (recipe snapshot, digest, download URLs, revisions); repo
+// writers of a private owner must get through those, and hidden recipes answer like missing ones.
+func TestDamastPackagesConanPrivateOwner(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	damastPrivateOwner(t) // user4 writes repo4, user2 reads it
+	base := setting.AppURL + "api/packages/user5/conan"
+	token := func(user string) string {
+		t.Helper()
+		resp := MakeRequest(t, NewRequest(t, "GET", base+"/v1/users/authenticate").AddBasicAuth(user), http.StatusOK)
+		return resp.Body.String()
+	}
+	writer, reader := token("user4"), token("user2")
+
+	// upstream's flows, including their pre-upload GETs that expect 404
+	uploadConanPackageV1(t, base, writer, "repo4", "1.0", "dev", "stable")
+	uploadConanPackageV2(t, base, writer, "repo4", "2.0", "dev", "stable", "rev1", "prev1")
+	p, err := packages_model.GetPackageByName(db.DefaultContext, 5, packages_model.TypeConan, "repo4")
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, p.RepoID)
+
+	owner := token("user5")
+	uploadConanPackageV2(t, base, owner, "secret", "1.0", "dev", "stable", "rev1", "prev1")
+
+	get := func(tok, path string, status int) string {
+		t.Helper()
+		return MakeRequest(t, NewRequest(t, "GET", base+path).AddTokenAuth(tok), status).Body.String()
+	}
+	get(reader, "/v1/conans/repo4/1.0/dev/stable", http.StatusOK)
+	get(reader, "/v2/conans/repo4/2.0/dev/stable/latest", http.StatusOK)
+	get(reader, "/v2/conans/repo4/2.0/dev/stable/revisions/rev1/files/"+conanfileName, http.StatusOK)
+
+	for _, path := range []string{
+		"/v1/conans/%s/1.0/dev/stable",
+		"/v1/conans/%s/1.0/dev/stable/digest",
+		"/v1/conans/%s/1.0/dev/stable/download_urls",
+		"/v1/conans/%s/1.0/dev/stable/search",
+		"/v1/conans/%s/1.0/dev/stable/packages/" + conanPackageReference,
+		"/v2/conans/%s/1.0/dev/stable/latest",
+		"/v2/conans/%s/1.0/dev/stable/revisions",
+		"/v2/conans/%s/1.0/dev/stable/revisions/rev1/files",
+		"/v2/conans/%s/1.0/dev/stable/revisions/rev1/files/" + conanfileName,
+		"/v2/conans/%s/1.0/dev/stable/revisions/rev1/search",
+		"/v2/conans/%s/1.0/dev/stable/revisions/rev1/packages/" + conanPackageReference + "/latest",
+	} {
+		missing := get(reader, fmt.Sprintf(path, "missing"), http.StatusNotFound)
+		assert.Equal(t, missing, get(reader, fmt.Sprintf(path, "secret"), http.StatusNotFound), path)
+	}
+
+	// the owner-wide recipe search keeps Forgejo's owner rules; readers never write
+	get(reader, "/v2/conans/search?q=secret", http.StatusUnauthorized)
+	MakeRequest(t, NewRequestWithBody(t, "PUT", base+"/v2/conans/repo4/3.0/dev/stable/revisions/rev1/files/"+conanfileName,
+		strings.NewReader(buildConanfileContent("repo4", "3.0"))).AddTokenAuth(reader), http.StatusUnauthorized)
+}
+
 // pub publishes in three steps (GET upload URL, POST file, GET finalize); repo writers get all of them,
 // with the same per-package checks as single-step uploads.
 func TestDamastPackagesPubUpload(t *testing.T) {

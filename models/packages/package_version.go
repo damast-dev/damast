@@ -136,6 +136,11 @@ func getVersionByNameAndVersion(ctx context.Context, ownerID int64, packageType 
 	if len(pvs) == 0 {
 		return nil, ErrPackageNotExist
 	}
+	if DamastCheckReadPackageID != nil { // DAMAST: hidden packages look missing
+		if err := DamastCheckReadPackageID(ctx, pvs[0].PackageID); err != nil {
+			return nil, err
+		}
+	}
 	return pvs[0], nil
 }
 
