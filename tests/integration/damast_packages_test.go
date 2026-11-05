@@ -21,6 +21,7 @@ import (
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	api "forgejo.org/modules/structs"
+	app_context "forgejo.org/services/context"
 	"forgejo.org/tests"
 
 	"github.com/stretchr/testify/assert"
@@ -109,6 +110,7 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 		session.MakeRequest(t, NewRequestWithValues(t, "POST", link, map[string]string{
 			"action": "damast_inherit",
 		}), http.StatusSeeOther)
+		assert.Equal(t, "success%3DPackage%2Baccess%2Bsettings%2Bupdated.", session.GetCookie(app_context.CookieNameFlash).Value)
 
 		inherit, err := damast.InheritsRepoAccess(ctx, pkg("repo4").ID)
 		require.NoError(t, err)

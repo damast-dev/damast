@@ -6,5 +6,6 @@
 	},
 	"damast.packages.repo_access": "Repository access",
 	"damast.packages.inherit": "Inherit access from the linked repository",
+	"damast.packages.inherit_saved": "Package access settings updated.",
 	"damast.packages.inherit_help": "People and Actions workflows with read access to the linked repository can download this package; with write access they can publish new versions."
 }

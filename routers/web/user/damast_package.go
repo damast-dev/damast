@@ -24,6 +24,6 @@ func damastPackageInheritPost(ctx *context.Context) {
 		ctx.ServerError("SetInheritRepoAccess", err)
 		return
 	}
-	ctx.Flash.Success("Package access settings updated.")
+	ctx.Flash.Success(ctx.Tr("damast.packages.inherit_saved"))
 	ctx.Redirect(ctx.Link)
 }
