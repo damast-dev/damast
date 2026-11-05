@@ -35,6 +35,11 @@ test('Security advisory: create a draft and publish it', async ({page, browser})
   await expect(page.locator('#damast-advisory-description strong')).toHaveText('parser');
   const url = page.url();
 
+  // the private discussion
+  await page.fill('#damast-advisory-comments textarea[name=content]', 'Fix is in review.');
+  await page.locator('#damast-advisory-comments button.primary').click();
+  await expect(page.locator('#damast-advisory-comments')).toContainText('Fix is in review.');
+
   // a draft is a 404 for anonymous visitors
   const anonymous = await (await test_context(browser)).newPage();
   expect((await anonymous.goto(url))?.status()).toBe(404);
