@@ -46,13 +46,17 @@ func AccessLevel(ctx context.Context, repo *repo_model.Repository, a *damast.Sec
 	if repo == nil || a == nil || perm == nil || a.RepoID != repo.ID {
 		return None, nil
 	}
+	if damast.IsOrphan(repo, a.CreatedUnix) {
+		return None, nil // left over from an earlier repository with the same id
+	}
 	if IsAdmin(perm) {
 		return Admin, nil
 	}
 	if !CanReadRepo(perm) {
 		return None, nil // includes reporters and collaborators who lost access to the repository
 	}
-	if doer != nil && doer.ID > 0 { // not anonymous, ghost or the Actions user
+	// not anonymous, ghost or the Actions user; blocking by the owner ends the access like a collaboration
+	if doer != nil && doer.ID > 0 && !user_model.IsBlocked(ctx, repo.OwnerID, doer.ID) {
 		if a.ReporterID == doer.ID {
 			return Participant, nil
 		}

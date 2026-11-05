@@ -233,7 +233,7 @@ func TestDamastSecurityReportCaps(t *testing.T) {
 	owner := forgery.CreateUser(t, nil)
 	reporter := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, nil)
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	token := forgery.CreateAccessToken(t, reporter, nil).Token
 	report := func(status int) *security.APIAdvisory {
 		resp := MakeRequest(t, NewRequestWithJSON(t, "POST", "/api/v1/repos/"+repo.FullName()+"/security-advisories/reports", map[string]any{
@@ -262,7 +262,7 @@ func TestDamastSecurityReportCaps(t *testing.T) {
 
 	// the daily cap counts reports in all repositories
 	other := forgery.CreateRepository(t, owner, nil)
-	require.NoError(t, damast.SetPrivateReporting(ctx, other.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, other, true))
 	for range security.MaxReportsPerDay {
 		require.NoError(t, damast.CreateAdvisory(ctx, &damast.SecurityAdvisory{RepoID: other.ID + 1000, State: damast.AdvisoryClosed, CreatorID: reporter.ID, ReporterID: reporter.ID, Title: "t", Severity: "low"}))
 	}
@@ -309,7 +309,7 @@ func TestDamastSecurityLifecycle(t *testing.T) {
 	newOwner := forgery.CreateUser(t, nil)
 	reporter := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, &forgery.CreateRepositoryOptions{SkipCleanup: true})
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	a, err := security.Report(ctx, repo, reporter, &security.Input{Title: "lifecycle", Description: "d", Severity: "low"})
 	require.NoError(t, err)
 	_, err = security.AddComment(ctx, repo, reporter, a, "from the reporter")

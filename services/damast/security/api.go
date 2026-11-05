@@ -190,10 +190,14 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 			Package: APIPackage{Ecosystem: p.Ecosystem, Name: p.Package}, VulnerableVersionRange: p.VulnerableRange, PatchedVersions: p.Patched,
 		})
 	}
-	ids := []int64{a.CreatorID}
-	for _, c := range a.Credits {
-		ids = append(ids, c.UserID)
+	credits, err := PublicCredits(ctx, a)
+	if err != nil {
+		return nil, err
 	}
+	for _, c := range credits {
+		r.Credits = append(r.Credits, APICredit{Login: c.User.Name, Type: c.Type})
+	}
+	ids := []int64{a.CreatorID}
 	var collaborators []int64
 	if level >= Participant {
 		var err error
@@ -205,11 +209,6 @@ func ToAPI(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 	users, err := LoadUsers(ctx, ids...)
 	if err != nil {
 		return nil, err
-	}
-	for _, c := range a.Credits {
-		if u := users[c.UserID]; !u.IsGhost() {
-			r.Credits = append(r.Credits, APICredit{Login: u.Name, Type: c.Type})
-		}
 	}
 	if level >= Participant {
 		r.Author = convert.ToUser(ctx, users[a.CreatorID], doer)
@@ -238,11 +237,8 @@ func InputFromAPI(ctx context.Context, o *APICreateOption) (*Input, error) {
 		})
 	}
 	for _, c := range o.Credits {
-		u, err := user_model.GetUserByName(ctx, c.Login)
+		u, err := CreditUser(ctx, c.Login)
 		if err != nil {
-			if user_model.IsErrUserNotExist(err) {
-				return nil, invalid("credit_user", c.Login)
-			}
 			return nil, err
 		}
 		in.Credits = append(in.Credits, damast.Credit{UserID: u.ID, Type: c.Type})
@@ -263,18 +259,12 @@ func OptionFromAdvisory(ctx context.Context, a *damast.SecurityAdvisory) (*APICr
 			Package: APIPackage{Ecosystem: p.Ecosystem, Name: p.Package}, VulnerableVersionRange: p.VulnerableRange, PatchedVersions: p.Patched,
 		})
 	}
-	ids := make([]int64, 0, len(a.Credits))
-	for _, c := range a.Credits {
-		ids = append(ids, c.UserID)
-	}
-	users, err := LoadUsers(ctx, ids...)
+	credits, err := PublicCredits(ctx, a)
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range a.Credits {
-		if u := users[c.UserID]; !u.IsGhost() {
-			o.Credits = append(o.Credits, APICredit{Login: u.Name, Type: c.Type})
-		}
+	for _, c := range credits {
+		o.Credits = append(o.Credits, APICredit{Login: c.User.Name, Type: c.Type})
 	}
 	return o, nil
 }

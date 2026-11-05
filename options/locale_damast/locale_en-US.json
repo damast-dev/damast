@@ -87,6 +87,7 @@
 	"damast.security.error.patched": "The patched version of %s must be a single version such as 1.4.2.",
 	"damast.security.error.credit_type": "Unknown credit type \"%s\".",
 	"damast.security.error.credit_user": "Unknown user \"%s\" in credits.",
+	"damast.security.error.credit_private": "%s does not have a public profile and cannot be credited.",
 	"damast.security.error.unknown_user": "Unknown user \"%s\".",
 	"damast.security.error.state": "An advisory in state %s cannot become %s.",
 	"damast.security.error.comment": "A comment must not be empty and may have at most %d bytes.",
