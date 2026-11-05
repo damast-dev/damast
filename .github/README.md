@@ -97,6 +97,8 @@ What you lose:
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
 
+Coming back to Damast later? Packages you published while on Forgejo are owner-only until you turn on "Inherit access from the linked repository" in their settings. If you dropped the `damast_*` tables, that goes for every package. If you kept them, the old packages keep their setting.
+
 ## Versions
 
 ```
