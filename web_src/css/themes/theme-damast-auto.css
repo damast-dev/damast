@@ -1,0 +1,2 @@
+@import "./theme-damast-light.css";
+@import "./theme-damast-dark.css" (prefers-color-scheme: dark);
