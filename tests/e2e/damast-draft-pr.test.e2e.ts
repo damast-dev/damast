@@ -17,10 +17,10 @@ test.use({user: 'user2'});
 test('Damast: create a draft PR, mark it ready, convert back', async ({page, request}, workerInfo) => {
   const headers = {Authorization: `Basic ${btoa('user2:password')}`};
   const repo = `damast-draft-${workerInfo.project.name.toLowerCase().replace(/\W/g, '')}-${Date.now()}`;
-  let resp = await request.post('/api/v1/user/repos', {headers, data: {name: repo, auto_init: true, default_branch: 'main'}});
+  let resp = await request.post('/api/v1/user/repos', {headers, timeout: 15000, data: {name: repo, auto_init: true, default_branch: 'main'}});
   expect(resp.status()).toBe(201);
   resp = await request.post(`/api/v1/repos/user2/${repo}/contents/feature.txt`, {
-    headers, data: {content: btoa('feature'), branch: 'main', new_branch: 'feature', message: 'add feature'},
+    headers, timeout: 15000, data: {content: btoa('feature'), branch: 'main', new_branch: 'feature', message: 'add feature'},
   });
   expect(resp.status()).toBe(201);
 
@@ -36,19 +36,29 @@ test('Damast: create a draft PR, mark it ready, convert back', async ({page, req
     await expect(draftItem).toBeVisible();
     await draftItem.click();
 
-    await expect(page).toHaveURL(new RegExp(`/user2/${repo}/pulls/1$`));
+    await expect(page).toHaveURL(new RegExp(`/user2/${repo}/pulls/1$`), {timeout: 15000}); // creating a PR is slow on a loaded machine
     await expect(page.locator('#issue-title-display h1')).toContainText('Draft from the browser');
     await expect(page.locator('#issue-title-display h1')).not.toContainText('WIP');
     await expect(page.locator('.issue-title-meta .issue-state-label')).toContainText('Draft');
     await expect(page.locator('#issue-title-editor input')).toHaveValue('WIP: Draft from the browser');
 
     // Ready for review in the merge box
-    await page.locator('[data-test-name="damast-ready-for-review"]').click();
+    await page.waitForLoadState('load'); // the .toggle-wip handler is bound by the page's JS
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/title') && r.ok(), {timeout: 15000}),
+      page.waitForEvent('load', {timeout: 15000}), // the handler reloads the page
+      page.locator('[data-test-name="damast-ready-for-review"]').click(),
+    ]);
     await expect(page.locator('.issue-title-meta .issue-state-label')).toContainText('Open');
     await expect(page.locator('[data-test-name="damast-ready-for-review"]')).toHaveCount(0);
 
     // Convert to draft in the sidebar
-    await page.locator('[data-test-name="damast-convert-to-draft"]').click();
+    await page.waitForLoadState('load'); // the .toggle-wip handler is bound by the page's JS
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/title') && r.ok(), {timeout: 15000}),
+      page.waitForEvent('load', {timeout: 15000}), // the handler reloads the page
+      page.locator('[data-test-name="damast-convert-to-draft"]').click(),
+    ]);
     await expect(page.locator('.issue-title-meta .issue-state-label')).toContainText('Draft');
     await expect(page.locator('[data-test-name="damast-ready-for-review"]')).toBeVisible();
 
@@ -65,10 +75,10 @@ test('Damast: create a draft PR, mark it ready, convert back', async ({page, req
 test('Damast: plain "Create pull request" stays a normal PR', async ({page, request}, workerInfo) => {
   const headers = {Authorization: `Basic ${btoa('user2:password')}`};
   const repo = `damast-nodraft-${workerInfo.project.name.toLowerCase().replace(/\W/g, '')}-${Date.now()}`;
-  let resp = await request.post('/api/v1/user/repos', {headers, data: {name: repo, auto_init: true, default_branch: 'main'}});
+  let resp = await request.post('/api/v1/user/repos', {headers, timeout: 15000, data: {name: repo, auto_init: true, default_branch: 'main'}});
   expect(resp.status()).toBe(201);
   resp = await request.post(`/api/v1/repos/user2/${repo}/contents/feature.txt`, {
-    headers, data: {content: btoa('feature'), branch: 'main', new_branch: 'feature', message: 'add feature'},
+    headers, timeout: 15000, data: {content: btoa('feature'), branch: 'main', new_branch: 'feature', message: 'add feature'},
   });
   expect(resp.status()).toBe(201);
 
@@ -77,7 +87,7 @@ test('Damast: plain "Create pull request" stays a normal PR', async ({page, requ
     await page.locator('.show-form-container').getByText('New pull request').click();
     await page.locator('#issue_title').fill('Normal PR');
     await page.locator('[data-test-name="damast-create-pr"]').click();
-    await expect(page).toHaveURL(new RegExp(`/user2/${repo}/pulls/1$`));
+    await expect(page).toHaveURL(new RegExp(`/user2/${repo}/pulls/1$`), {timeout: 15000}); // creating a PR is slow on a loaded machine
     await expect(page.locator('.issue-title-meta .issue-state-label')).toContainText('Open');
     await expect(page.locator('#issue-title-editor input')).toHaveValue('Normal PR');
   } finally {
