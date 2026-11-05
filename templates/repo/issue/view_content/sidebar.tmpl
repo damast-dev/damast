@@ -2,7 +2,7 @@
 	{{template "repo/issue/view_content/sidebar/branch_selector_field" .}}
 	{{if .Issue.IsPull}}
 		{{template "repo/issue/view_content/sidebar/pull_review" .}}
-		{{template "repo/issue/view_content/sidebar/pull_wip" .}}
+		{{template "repo/damast/pull_draft_sidebar" .}}{{/* DAMAST: was repo/issue/view_content/sidebar/pull_wip */}}
 		<div class="divider"></div>
 	{{end}}
 

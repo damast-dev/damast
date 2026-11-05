@@ -36,6 +36,7 @@ import (
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/base"
 	"forgejo.org/modules/charset"
+	damast_draft "forgejo.org/modules/damast/draft" // DAMAST:
 	"forgejo.org/modules/emoji"
 	"forgejo.org/modules/git"
 	"forgejo.org/modules/gitrepo"
@@ -1674,6 +1675,9 @@ func CompareAndPullRequestPost(ctx *context.Context) {
 	if util.IsEmptyString(form.Title) {
 		ctx.JSONError(ctx.Tr("repo.issues.new.title_empty"))
 		return
+	}
+	if ctx.FormBool("draft") { // DAMAST: "Create draft pull request"
+		form.Title = damast_draft.Mark(form.Title)
 	}
 
 	content := form.Content

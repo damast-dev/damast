@@ -1,0 +1,11 @@
+{{/* DAMAST: draft toggle in the PR sidebar, replaces repo/issue/view_content/sidebar/pull_wip.
+	Same permission and handler (.toggle-wip in repo-issue.js) as upstream's WIP toggle. */}}
+{{if and (or .HasIssuesOrPullsWritePermission .IsIssuePoster) (not .HasMerged) (not .Issue.IsClosed)}}
+	<div class="toggle-wip" data-title="{{.Issue.Title}}" data-wip-prefixes="{{JsonUtils.EncodeToString .PullRequestWorkInProgressPrefixes}}" data-update-url="{{.Issue.Link}}/title">
+		{{if .IsPullWorkInProgress}}
+			<a class="muted flex-text-inline" href="#" data-test-name="damast-sidebar-ready">{{svg "octicon-eye" 16}} {{ctx.Locale.Tr "damast.drafts.ready"}}</a>
+		{{else}}
+			<a class="muted flex-text-inline" href="#" data-test-name="damast-convert-to-draft">{{svg "octicon-git-pull-request-draft" 16}} {{ctx.Locale.Tr "damast.drafts.convert"}}</a>
+		{{end}}
+	</div>
+{{end}}
