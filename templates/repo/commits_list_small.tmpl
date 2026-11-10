@@ -5,12 +5,13 @@
 	{{$index = Eval $index "+" 1}}
 	<div class="singular-commit" id="{{$tag}}">
 		<span class="badge badge-commit">{{svg "octicon-git-commit"}}</span>
+		{{$damastCo := DamastCoAuthors ctx .Commit}}{{if $damastCo}}{{template "repo/damast/authors" (dict "Co" $damastCo "User" .User "Name" .Author.Name "Email" .Author.Email "Size" 20 "Mode" "small")}}{{else}}{{/* DAMAST: co-author stack */}}
 		{{if .User}}
 			<a class="avatar" href="{{.User.HomeLink}}">{{ctx.AvatarUtils.Avatar .User 20}}</a>
 		{{else}}
 			{{ctx.AvatarUtils.AvatarByEmail .Author.Email .Author.Name 20}}
 		{{end}}
-		{{template "repo/damast/coauthors" (dict "Commit" .Commit "Size" 20)}}{{/* DAMAST: */}}
+		{{end}}{{/* DAMAST: */}}
 
 		{{$commitLink := printf "%s/commit/%s" $.comment.Issue.PullRequest.BaseRepo.Link (PathEscape .ID.String)}}
 

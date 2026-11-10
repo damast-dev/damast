@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"forgejo.org/models/db"
+	repo_model "forgejo.org/models/repo"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/timeutil"
@@ -94,8 +95,9 @@ func (AdvisoryComment) TableName() string { return "damast_security_advisory_com
 
 // SecuritySetting holds the security settings of a repository. No row means defaults (reporting off).
 type SecuritySetting struct {
-	RepoID           int64 `xorm:"pk"`
-	PrivateReporting bool  `xorm:"NOT NULL DEFAULT false"`
+	RepoID           int64              `xorm:"pk"`
+	PrivateReporting bool               `xorm:"NOT NULL DEFAULT false"`
+	CreatedUnix      timeutil.TimeStamp `xorm:"created"` // see IsOrphan
 }
 
 func (SecuritySetting) TableName() string { return "damast_security_setting" }
@@ -270,26 +272,39 @@ func AdvisoryComments(ctx context.Context, advisoryID int64) ([]*AdvisoryComment
 	return list, db.GetEngine(ctx).Where("advisory_id = ?", advisoryID).OrderBy("id").Find(&list)
 }
 
-// PrivateReportingEnabled reports whether the repository accepts private vulnerability reports.
-func PrivateReportingEnabled(ctx context.Context, repoID int64) (bool, error) {
-	s := &SecuritySetting{}
-	has, err := db.GetEngine(ctx).ID(repoID).Get(s)
-	return has && s.PrivateReporting, err
+// IsOrphan reports whether a row created at created belongs to an earlier repository with the same id: one
+// deleted while the instance ran plain Forgejo, which does not know the damast_* tables. A repository's
+// created_unix is set once on insert (transfers and renames keep it; migrations, adoptions, forks and templates
+// insert a new repository), so rows of the current repository are never older than it. Orphans are ignored,
+// never deleted in a read request; the repository delete hook removes them with the repository.
+func IsOrphan(repo *repo_model.Repository, created timeutil.TimeStamp) bool {
+	return created < repo.CreatedUnix
 }
 
-// SetPrivateReporting turns private vulnerability reporting on or off.
-func SetPrivateReporting(ctx context.Context, repoID int64, enabled bool) error {
-	e := db.GetEngine(ctx)
-	has, err := e.ID(repoID).Exist(&SecuritySetting{})
-	if err != nil {
+// PrivateReportingEnabled reports whether the repository accepts private vulnerability reports.
+func PrivateReportingEnabled(ctx context.Context, repo *repo_model.Repository) (bool, error) {
+	s := &SecuritySetting{}
+	has, err := db.GetEngine(ctx).ID(repo.ID).Get(s)
+	return has && !IsOrphan(repo, s.CreatedUnix) && s.PrivateReporting, err
+}
+
+// SetPrivateReporting turns private vulnerability reporting on or off. An orphaned row is replaced.
+func SetPrivateReporting(ctx context.Context, repo *repo_model.Repository, enabled bool) error {
+	return db.WithTx(ctx, func(ctx context.Context) error {
+		e := db.GetEngine(ctx)
+		s := &SecuritySetting{}
+		if has, err := e.ID(repo.ID).Get(s); err != nil {
+			return err
+		} else if has && !IsOrphan(repo, s.CreatedUnix) {
+			_, err = e.ID(repo.ID).Cols("private_reporting").Update(&SecuritySetting{PrivateReporting: enabled})
+			return err
+		}
+		if _, err := e.ID(repo.ID).Delete(new(SecuritySetting)); err != nil {
+			return err
+		}
+		_, err := e.Insert(&SecuritySetting{RepoID: repo.ID, PrivateReporting: enabled})
 		return err
-	}
-	if has {
-		_, err = e.ID(repoID).Cols("private_reporting").Update(&SecuritySetting{PrivateReporting: enabled})
-		return err
-	}
-	_, err = e.Insert(&SecuritySetting{RepoID: repoID, PrivateReporting: enabled})
-	return err
+	})
 }
 
 // DeleteRepoSecurityData removes all advisories, reports, comments and settings of a repository.
@@ -307,21 +322,6 @@ func DeleteRepoSecurityData(ctx context.Context, repoID int64) error {
 	}
 	_, err := e.ID(repoID).Delete(new(SecuritySetting))
 	return err
-}
-
-// DeleteAdvisory removes an advisory with its comments and collaborators.
-func DeleteAdvisory(ctx context.Context, id int64) error {
-	return db.WithTx(ctx, func(ctx context.Context) error {
-		e := db.GetEngine(ctx)
-		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryComment)); err != nil {
-			return err
-		}
-		if _, err := e.Where("advisory_id = ?", id).Delete(new(AdvisoryCollaborator)); err != nil {
-			return err
-		}
-		_, err := e.ID(id).Delete(new(SecurityAdvisory))
-		return err
-	})
 }
 
 // DeleteUserSecurityData runs when a user is deleted: their reports and comments stay and show the ghost

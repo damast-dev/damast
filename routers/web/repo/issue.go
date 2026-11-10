@@ -34,6 +34,7 @@ import (
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/base"
 	"forgejo.org/modules/container"
+	damast_draft "forgejo.org/modules/damast/draft" // DAMAST:
 	"forgejo.org/modules/emoji"
 	"forgejo.org/modules/git"
 	issue_indexer "forgejo.org/modules/indexer/issues"
@@ -1497,7 +1498,7 @@ func ViewIssue(ctx *context.Context) {
 		return
 	}
 
-	ctx.Data["Title"] = fmt.Sprintf("#%d - %s", issue.Index, emoji.ReplaceAliases(issue.Title))
+	ctx.Data["Title"] = fmt.Sprintf("#%d - %s", issue.Index, emoji.ReplaceAliases(damast_draft.DisplayTitle(issue.Title, issue.IsPull))) // DAMAST: draft title without prefix
 
 	iw := new(issues_model.IssueWatch)
 	if ctx.Doer != nil {

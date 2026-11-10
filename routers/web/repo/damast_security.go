@@ -169,7 +169,7 @@ func DamastSecurity(ctx *context.Context) {
 	}
 	ctx.Data["DamastAdvisories"] = advisories
 
-	enabled, err := damast.PrivateReportingEnabled(ctx, repo.ID)
+	enabled, err := damast.PrivateReportingEnabled(ctx, repo)
 	if err != nil {
 		ctx.ServerError("PrivateReportingEnabled", err)
 		return
@@ -186,7 +186,7 @@ func DamastSecurity(ctx *context.Context) {
 
 // DamastSecuritySettingsPost turns private vulnerability reporting on or off.
 func DamastSecuritySettingsPost(ctx *context.Context) {
-	if err := damast.SetPrivateReporting(ctx, ctx.Repo.Repository.ID, ctx.FormBool("private_reporting")); err != nil {
+	if err := damast.SetPrivateReporting(ctx, ctx.Repo.Repository, ctx.FormBool("private_reporting")); err != nil {
 		ctx.ServerError("SetPrivateReporting", err)
 		return
 	}

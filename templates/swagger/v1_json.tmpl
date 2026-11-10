@@ -2190,6 +2190,181 @@
         }
       }
     },
+    "/damast/packages/{owner}/settings": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "package"
+        ],
+        "summary": "Gets an owner's Damast package settings (Damast only)",
+        "operationId": "damastGetOwnerPackageSettings",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the packages",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastOwnerPackageSettings"
+          },
+          "403": {
+            "$ref": "#/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "patch": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "package"
+        ],
+        "summary": "Changes an owner's Damast package settings (Damast only)",
+        "operationId": "damastEditOwnerPackageSettings",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the packages",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "$ref": "#/definitions/DamastOwnerPackageSettings"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastOwnerPackageSettings"
+          },
+          "403": {
+            "$ref": "#/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/damast/packages/{owner}/{type}/{name}/settings": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "package"
+        ],
+        "summary": "Gets a package's Damast settings (Damast only)",
+        "operationId": "damastGetPackageSettings",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the package",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "type of the package",
+            "name": "type",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the package",
+            "name": "name",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastPackageSettings"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "patch": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "package"
+        ],
+        "summary": "Changes a package's Damast settings (Damast only)",
+        "operationId": "damastEditPackageSettings",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the package",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "type of the package",
+            "name": "type",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the package",
+            "name": "name",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "$ref": "#/definitions/DamastPackageSettings"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastPackageSettings"
+          },
+          "403": {
+            "$ref": "#/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
     "/gitignore/templates": {
       "get": {
         "produces": [
@@ -26135,6 +26310,11 @@
           "type": "string",
           "x-go-name": "Body"
         },
+        "draft": {
+          "description": "Create the pull request as a draft: the first work-in-progress prefix is added to the title",
+          "type": "boolean",
+          "x-go-name": "Draft"
+        },
         "due_date": {
           "type": "string",
           "format": "date-time",
@@ -27258,6 +27438,34 @@
       },
       "x-go-name": "OSVSeverity",
       "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOwnerPackageSettings": {
+      "type": "object",
+      "title": "DamastOwnerPackageSettings are an owner's Damast package settings.",
+      "properties": {
+        "new_packages": {
+          "description": "who may create new package names: owner-level package writers only (default), or also repository\nwriters and Actions runs, in container, npm, Maven, NuGet, RubyGems and generic registries",
+          "type": "string",
+          "enum": [
+            "owners",
+            "repo_writers"
+          ],
+          "x-go-name": "NewPackages"
+        }
+      },
+      "x-go-package": "forgejo.org/routers/api/v1/packages"
+    },
+    "DamastPackageSettings": {
+      "type": "object",
+      "title": "DamastPackageSettings are a package's Damast settings.",
+      "properties": {
+        "inherit_repo_access": {
+          "description": "readers and writers of the linked repository may download and publish new versions of the package",
+          "type": "boolean",
+          "x-go-name": "InheritRepoAccess"
+        }
+      },
+      "x-go-package": "forgejo.org/routers/api/v1/packages"
     },
     "DamastPrivateReporting": {
       "type": "object",
@@ -33355,6 +33563,18 @@
         "items": {
           "$ref": "#/definitions/DamastOSV"
         }
+      }
+    },
+    "DamastOwnerPackageSettings": {
+      "description": "DamastOwnerPackageSettings",
+      "schema": {
+        "$ref": "#/definitions/DamastOwnerPackageSettings"
+      }
+    },
+    "DamastPackageSettings": {
+      "description": "DamastPackageSettings",
+      "schema": {
+        "$ref": "#/definitions/DamastPackageSettings"
       }
     },
     "DamastPrivateReporting": {

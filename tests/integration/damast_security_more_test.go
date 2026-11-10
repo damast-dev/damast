@@ -150,7 +150,7 @@ func TestDamastSecurityCommentEdit(t *testing.T) {
 	reporter := forgery.CreateUser(t, nil)
 	collaborator := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, &forgery.CreateRepositoryOptions{Collaborators: map[*user_model.User]perm.AccessMode{collaborator: perm.AccessModeRead}})
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	a, err := security.Report(ctx, repo, reporter, &security.Input{Title: "t", Description: "d", Severity: "low"})
 	require.NoError(t, err)
 	require.NoError(t, security.AddCollaborator(ctx, repo, owner, a, collaborator))

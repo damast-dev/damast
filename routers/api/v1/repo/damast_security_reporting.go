@@ -38,7 +38,7 @@ func DamastGetPrivateReporting(ctx *context.APIContext) {
 	//     "$ref": "#/responses/DamastPrivateReporting"
 	//   "404":
 	//     "$ref": "#/responses/notFound"
-	enabled, err := damast.PrivateReportingEnabled(ctx, ctx.Repo().Repository.ID)
+	enabled, err := damast.PrivateReportingEnabled(ctx, ctx.Repo().Repository)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -99,7 +99,7 @@ func DamastDisablePrivateReporting(ctx *context.APIContext) {
 }
 
 func damastSetPrivateReporting(ctx *context.APIContext, enabled bool) {
-	if err := damast.SetPrivateReporting(ctx, ctx.Repo().Repository.ID, enabled); err != nil {
+	if err := damast.SetPrivateReporting(ctx, ctx.Repo().Repository, enabled); err != nil {
 		ctx.InternalServerError(err)
 		return
 	}

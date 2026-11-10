@@ -51,6 +51,7 @@ import {initAdminEmails} from './features/admin/emails.js';
 import {initAdminCommon} from './features/admin/common.js';
 import {initRepoTemplateSearch} from './features/repo-template.js';
 import {initRepoCodeView} from './features/repo-code.ts';
+import {initDamastFileTree} from './features/damast-file-tree.js'; // DAMAST:
 import {initSshKeyFormParser} from './features/sshkey-helper.js';
 import {initRepoArchiveLinks} from './features/repo-common.js';
 import {initRepoMigrationStatusChecker} from './features/repo-migrate.js';
@@ -151,6 +152,7 @@ onDomReady(() => {
   initRepoArchiveLinks();
   initRepoBranchButton();
   initRepoCodeView();
+  initDamastFileTree(); // DAMAST:
   initRepoCommentForm();
   initRepoEllipsisButton();
   initRepoDiffCommitBranchesAndTags();

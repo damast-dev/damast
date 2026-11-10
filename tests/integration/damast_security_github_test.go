@@ -94,7 +94,7 @@ func TestDamastSecurityReportingAPI(t *testing.T) {
 	assert.False(t, enabled())
 	MakeRequest(t, NewRequest(t, "PUT", url).AddTokenAuth(token), http.StatusNoContent)
 	assert.True(t, enabled())
-	on, err := damast.PrivateReportingEnabled(db.DefaultContext, repo.ID)
+	on, err := damast.PrivateReportingEnabled(db.DefaultContext, repo)
 	require.NoError(t, err)
 	assert.True(t, on)
 	MakeRequest(t, NewRequest(t, "PUT", url).AddTokenAuth(token), http.StatusNoContent) // idempotent
@@ -158,7 +158,7 @@ func TestDamastSecurityGitHubFields(t *testing.T) {
 	reporter := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, nil)
 	token := forgery.CreateAccessToken(t, owner, nil).Token
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	api := "/api/v1/repos/" + repo.FullName() + "/security-advisories/"
 	get := func(id string) map[string]any {
 		t.Helper()
@@ -233,7 +233,7 @@ func TestDamastSecurityArchived(t *testing.T) {
 	owner := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, nil)
 	token := forgery.CreateAccessToken(t, owner, nil).Token
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	a, err := security.Create(ctx, repo, owner, &security.Input{Title: "t", Description: "d", Severity: "low"})
 	require.NoError(t, err)
 	c, err := security.AddComment(ctx, repo, owner, a, "hello")

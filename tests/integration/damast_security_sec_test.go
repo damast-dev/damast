@@ -13,12 +13,14 @@ import (
 
 	"forgejo.org/models/damast"
 	"forgejo.org/models/db"
+	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/structs"
 	"forgejo.org/modules/test"
 	"forgejo.org/services/damast/security"
 	"forgejo.org/services/mailer"
+	repo_service "forgejo.org/services/repository"
 	user_service "forgejo.org/services/user"
 	"forgejo.org/tests"
 	"forgejo.org/tests/forgery"
@@ -38,7 +40,7 @@ func TestDamastSecurityBlockedParticipant(t *testing.T) {
 	reporter := forgery.CreateUser(t, nil)
 	collaborator := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, nil)
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	a, err := security.Report(ctx, repo, reporter, &security.Input{Title: "blocked", Description: "BLOCKSECRET", Severity: "low"})
 	require.NoError(t, err)
 	require.NoError(t, security.AddCollaborator(ctx, repo, owner, a, collaborator))
@@ -116,7 +118,7 @@ func TestDamastSecurityReportCapConcurrent(t *testing.T) {
 	owner := forgery.CreateUser(t, nil)
 	reporter := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, nil)
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -144,8 +146,8 @@ func TestDamastSecurityReportCapConcurrent(t *testing.T) {
 	assert.Equal(t, security.MaxOpenReportsPerRepo, unittest.GetCount(t, &damast.SecurityAdvisory{RepoID: repo.ID}))
 }
 
-// Advisory rows older than their repository belong to an earlier repository with the same id (deleted while the
-// instance ran plain Forgejo). They are never shown and are cleaned up when found.
+// Advisory and setting rows older than their repository belong to an earlier repository with the same id (deleted
+// while the instance ran plain Forgejo). They are ignored, but reading never deletes anything.
 func TestDamastSecurityOrphanAdvisory(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
 	defer test.MockVariableValue(&mailer.SendAsync, func(...*mailer.Message) {})()
@@ -171,9 +173,56 @@ func TestDamastSecurityOrphanAdvisory(t *testing.T) {
 	MakeRequest(t, NewRequest(t, "GET", base+"/"+orphan.AdvisoryID), http.StatusNotFound)
 	assert.NotContains(t, MakeRequest(t, NewRequest(t, "GET", base+"/osv"), http.StatusOK).Body.String(), "ORPHANTITLE")
 
-	unittest.AssertNotExistsBean(t, &damast.SecurityAdvisory{ID: orphan.ID})
-	unittest.AssertNotExistsBean(t, &damast.AdvisoryComment{AdvisoryID: orphan.ID})
+	unittest.AssertExistsAndLoadBean(t, &damast.SecurityAdvisory{ID: orphan.ID})
+	unittest.AssertExistsAndLoadBean(t, &damast.AdvisoryComment{AdvisoryID: orphan.ID})
 	unittest.AssertExistsAndLoadBean(t, &damast.SecurityAdvisory{ID: fresh.ID})
+
+	// an orphaned setting does not switch private reporting on; saving the settings replaces it
+	reporter := forgery.CreateUser(t, nil)
+	reporterSession := loginUser(t, reporter.Name)
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
+	reporterSession.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/report"), http.StatusOK)
+	_, err = db.GetEngine(ctx).Exec("UPDATE damast_security_setting SET created_unix = ? WHERE repo_id = ?", int64(repo.CreatedUnix)-3600, repo.ID)
+	require.NoError(t, err)
+	reporterSession.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/report"), http.StatusNotFound)
+	has, err := db.GetEngine(ctx).ID(repo.ID).Exist(new(damast.SecuritySetting))
+	require.NoError(t, err)
+	assert.True(t, has, "an orphaned setting is ignored, not deleted")
+	session.MakeRequest(t, NewRequestWithValues(t, "POST", "/"+repo.FullName()+"/security/settings", map[string]string{"private_reporting": "on"}), http.StatusSeeOther)
+	reporterSession.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/report"), http.StatusOK)
+}
+
+// The orphan rule never hides the data of the repository itself: a repository is always older than its advisories
+// and settings (created_unix is only set on insert), also after a transfer, and a row from the very second the
+// repository was created counts as its own.
+func TestDamastSecurityOldRepositoryKeepsAdvisories(t *testing.T) {
+	defer tests.PrepareTestEnv(t)()
+	defer test.MockVariableValue(&mailer.SendAsync, func(...*mailer.Message) {})()
+	ctx := db.DefaultContext
+	owner := forgery.CreateUser(t, nil)
+	newOwner := forgery.CreateUser(t, nil)
+	reporter := forgery.CreateUser(t, nil)
+	repo := forgery.CreateRepository(t, owner, &forgery.CreateRepositoryOptions{SkipCleanup: true})
+	// a repository created years ago, like a long-lived or migrated one
+	_, err := db.GetEngine(ctx).Exec("UPDATE repository SET created_unix = ? WHERE id = ?", int64(repo.CreatedUnix)-5*365*24*3600, repo.ID)
+	require.NoError(t, err)
+	repo = unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: repo.ID})
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
+	a, err := security.Report(ctx, repo, reporter, &security.Input{Title: "OLDREPO", Description: "d", Severity: "low"})
+	require.NoError(t, err)
+	same, err := security.Create(ctx, repo, owner, &security.Input{Title: "SAMESECOND", Description: "d", Severity: "low"})
+	require.NoError(t, err)
+	_, err = db.GetEngine(ctx).Exec("UPDATE damast_security_advisory SET created_unix = ? WHERE id = ?", int64(repo.CreatedUnix), same.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, repo_service.TransferOwnership(ctx, owner, newOwner, repo, nil))
+	repo = unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{ID: repo.ID})
+	session := loginUser(t, newOwner.Name)
+	page := session.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security"), http.StatusOK).Body.String()
+	assert.Contains(t, page, "OLDREPO")
+	assert.Contains(t, page, "SAMESECOND")
+	session.MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/advisories/"+a.AdvisoryID), http.StatusOK)
+	loginUser(t, reporter.Name).MakeRequest(t, NewRequest(t, "GET", "/"+repo.FullName()+"/security/report"), http.StatusOK)
 }
 
 // A public-only token is limited to public data. Drafts, reports and private discussions in a public repository
@@ -184,7 +233,7 @@ func TestDamastSecurityPublicOnlyToken(t *testing.T) {
 	ctx := db.DefaultContext
 	owner := forgery.CreateUser(t, nil)
 	repo := forgery.CreateRepository(t, owner, &forgery.CreateRepositoryOptions{Files: forgery.FilesInit{}})
-	require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+	require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 	in := func() *security.Input {
 		return &security.Input{Title: "PUBONLY title", Description: "PUBONLY secret", Severity: "high"}
 	}

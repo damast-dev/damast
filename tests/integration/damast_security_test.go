@@ -217,7 +217,7 @@ var secRoutes = []secRoute{
 	{
 		method: "DELETE", pattern: "/api/v1/repos/{username}/{reponame}/private-vulnerability-reporting", allow: secAll(secAdmins), ok: 204,
 		restore: func(t *testing.T, repo *repo_model.Repository) {
-			require.NoError(t, damast.SetPrivateReporting(db.DefaultContext, repo.ID, true))
+			require.NoError(t, damast.SetPrivateReporting(db.DefaultContext, repo, true))
 		},
 	},
 }
@@ -263,7 +263,7 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 			},
 		})
 		e.repos[private] = repo
-		require.NoError(t, damast.SetPrivateReporting(ctx, repo.ID, true))
+		require.NoError(t, damast.SetPrivateReporting(ctx, repo, true))
 		e.advisories[private] = map[string]*damast.SecurityAdvisory{}
 		for _, state := range secStates {
 			a, err := security.Report(ctx, repo, e.users["reporter"], &security.Input{

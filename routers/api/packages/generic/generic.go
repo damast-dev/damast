@@ -15,6 +15,7 @@ import (
 	packages_module "forgejo.org/modules/packages"
 	"forgejo.org/routers/api/packages/helper"
 	"forgejo.org/services/context"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	packages_service "forgejo.org/services/packages"
 )
 
@@ -52,6 +53,10 @@ func CheckPackageFileExistence(ctx *context.Context) {
 			return
 		}
 		apiError(ctx, http.StatusInternalServerError, err)
+	}
+	if err := damast_packages.OnReadFile(ctx, pf); err != nil { // DAMAST: HEAD skips the file stream
+		apiError(ctx, http.StatusNotFound, packages_model.ErrPackageFileNotExist)
+		return
 	}
 
 	ctx.SetServeHeaders(&context.ServeHeaderOptions{

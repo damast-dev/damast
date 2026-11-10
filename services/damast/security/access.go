@@ -17,7 +17,6 @@ import (
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
 	user_model "forgejo.org/models/user"
-	"forgejo.org/modules/log"
 )
 
 // Level is what a user may do with one advisory. Levels are ordered.
@@ -47,11 +46,8 @@ func AccessLevel(ctx context.Context, repo *repo_model.Repository, a *damast.Sec
 	if repo == nil || a == nil || perm == nil || a.RepoID != repo.ID {
 		return None, nil
 	}
-	if a.CreatedUnix < repo.CreatedUnix {
-		// older than its repository: left over from a deleted repository whose id was reused (deleted while the
-		// instance ran plain Forgejo, which does not know the damast_* tables). Never show it; clean it up.
-		log.Warn("security: deleting advisory %s of an earlier repository %d", a.AdvisoryID, repo.ID)
-		return None, damast.DeleteAdvisory(ctx, a.ID)
+	if damast.IsOrphan(repo, a.CreatedUnix) {
+		return None, nil // left over from an earlier repository with the same id
 	}
 	if IsAdmin(perm) {
 		return Admin, nil
