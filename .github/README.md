@@ -34,7 +34,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Forgejo:** `Co-authored-by:` trailers show up as plain text at the bottom of the commit message. Pair programming, mob sessions and suggested changes all end up credited to one person.
 
-**On Damast:** every co-author appears next to the author, with avatar and a link to their profile, on the commit page and in every commit list. Co-authors without an account still show, with the avatar for their email. There is nothing to configure: write the trailer, Damast does the rest.
+**On Damast:** author and co-authors appear together as one overlapping avatar stack, like on GitHub, followed by their names ("Jonas Berg and 2 others" in lists, every name on the commit page). You see it on the commit page, on the latest commit above the file list, in the commit history, the commit graph, a pull request's Commits tab and its timeline. A co-author whose verified email belongs to an account links to that profile and shows under the account's name; everyone else, bots like `dependabot[bot]` included, shows with the name from the trailer and the avatar for their email. Accounts you aren't allowed to see stay unlinked. [`mast pr view <pr> commits`](https://github.com/damast-dev/mast) lists co-authors too. There is nothing to configure: write the trailer, Damast does the rest.
 
 ### Packages belong to their repository
 
@@ -47,6 +47,12 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Workflows publish with their built-in token. Pull requests from forks can only read.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
+
+### A file tree next to the code
+
+**On Forgejo:** the code view shows one folder at a time. To open a file three folders down, you click through three pages, and to look at its neighbour you click back up again. The only file tree is the one in pull request diffs.
+
+**On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. On the repository's start page it stays hidden until you open it, and blame pages keep their full width. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
 
 ### Draft pull requests
 
@@ -107,6 +113,7 @@ What you lose:
 | Feature | After going back |
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
+| File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
 | Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 
@@ -130,8 +137,9 @@ v17.0.1-damast.2-rc.1
 The direction is GitHub's way of working, inside the limits of the drop-in promise: if a feature would need to change Forgejo's tables, it waits or finds another way.
 
 **Shipped**
-- Co-authors on commit pages and in commit lists
+- Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
+- File tree next to the code: folders load as you open them, clicks swap only the content
 - Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Damast's own name and logo
 - Releases with release candidates, binaries for amd64 and arm64, Docker images

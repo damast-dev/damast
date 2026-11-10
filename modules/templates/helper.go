@@ -30,6 +30,7 @@ import (
 func NewFuncMap() template.FuncMap {
 	return map[string]any{
 		"ctx": func() any { return nil }, // template context function
+
 		"DamastCoAuthors": DamastCoAuthors, // DAMAST: co-author trailers
 
 		"DamastIsDraftPull": DamastIsDraftPull, // DAMAST: draft pull requests
