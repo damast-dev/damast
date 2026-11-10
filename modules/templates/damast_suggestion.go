@@ -45,7 +45,7 @@ func DamastSuggestion(ctx context.Context, doer *user_model.User, c *issues_mode
 		log.Error("DamastSuggestion: LoadPullRequest: %v", err)
 		return v
 	}
-	v.CanApply, err = damast_model.CanApplySuggestions(ctx, doer, c.Issue.PullRequest)
+	v.CanApply, err = damast_model.CanApplySuggestions(ctx, doer, nil, c.Issue.PullRequest)
 	if err != nil {
 		log.Error("DamastSuggestion: CanApplySuggestions: %v", err)
 	}

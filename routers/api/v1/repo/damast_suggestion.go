@@ -30,7 +30,7 @@ type DamastSuggestion struct {
 	New            []string `json:"new_lines"`
 	Resolved       bool     `json:"resolved"`
 	Applicable     bool     `json:"applicable"`
-	// Problem is why it can't be applied: "multiple", "old_side" or "outdated"; empty otherwise.
+	// Problem is why it can't be applied: "multiple", "old_side", "outdated" or "too_large"; empty otherwise.
 	Problem string `json:"problem,omitempty"`
 	HTMLURL string `json:"html_url"`
 }
@@ -39,7 +39,7 @@ type DamastSuggestion struct {
 type DamastApplySuggestionsOption struct {
 	CommentIDs []int64 `json:"comment_ids" binding:"Required"`
 	Message    string  `json:"message"`
-	// ContentVersions maps comment IDs to the content_version the client has shown; edited comments are refused.
+	// ContentVersions maps every comment ID to the content_version the client has shown (required); edited comments are refused.
 	ContentVersions map[int64]int `json:"content_versions"`
 }
 
@@ -107,7 +107,7 @@ func DamastListSuggestions(ctx *context.APIContext) {
 		ctx.Error(http.StatusInternalServerError, "LoadPosters", err)
 		return
 	}
-	canApply, err := damast_model.CanApplySuggestions(ctx, ctx.Doer(), pr)
+	canApply, err := damast_model.CanApplySuggestions(ctx, ctx.Doer(), ctx.Reducer(), pr)
 	if err != nil {
 		ctx.Error(http.StatusInternalServerError, "CanApplySuggestions", err)
 		return
@@ -197,7 +197,7 @@ func DamastApplySuggestions(ctx *context.APIContext) {
 		return
 	}
 	form := web.GetForm(ctx).(*DamastApplySuggestionsOption)
-	sha, err := suggestion_service.Apply(ctx, ctx.Doer(), pr, form.CommentIDs, form.ContentVersions, form.Message)
+	sha, err := suggestion_service.Apply(ctx, ctx.Doer(), ctx.Reducer(), pr, form.CommentIDs, form.ContentVersions, form.Message)
 	if err != nil {
 		key, status := suggestion_service.ErrorKey(err)
 		if key == "" {

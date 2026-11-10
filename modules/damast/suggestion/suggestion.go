@@ -14,6 +14,7 @@ package suggestion
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -42,7 +43,7 @@ func Parse(markdown string) (lines []string, found bool, err error) {
 		blocks     int
 		cur        []string
 	)
-	for _, line := range strings.Split(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n") {
 		if !inFence {
 			ind, ch, n, info, ok := openingFence(line)
 			if !ok {
@@ -185,8 +186,7 @@ func Replace(content []byte, edits []Edit) ([]byte, error) {
 			return nil, ErrOverlap
 		}
 	}
-	for i := len(edits) - 1; i >= 0; i-- {
-		e := edits[i]
+	for _, e := range slices.Backward(edits) {
 		repl := make([]string, len(e.Lines))
 		for j, l := range e.Lines {
 			if cr {

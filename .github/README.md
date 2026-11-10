@@ -98,7 +98,8 @@ Not yet: file attachments in advisories, temporary private forks, requesting a C
 - Whoever can push to the pull request's branch gets **Commit suggestion**, or **Add suggestion to batch** to collect several and commit them as one commit. That includes maintainers of a fork's pull request if its author allows edits by maintainers. Branch protection applies as for any push.
 - The commit message is "Apply suggestions from code review" (you can change it) and credits every reviewer whose suggestion is in it with a `Co-authored-by:` trailer, so they show up as co-authors.
 - Committed conversations are resolved. A suggestion whose lines changed in the meantime is outdated and can't be committed anymore; suggestions in one batch can't touch the same lines.
-- The API has it too: `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/suggestions` lists suggestions, `POST …/damast/suggestions/apply` commits them, and [`mast pr suggestions`](https://github.com/damast-dev/mast) uses both.
+- You only commit what you've seen: a suggestion edited after you loaded it is refused. LFS pointers, files too large for the web editor, suggestions over 64 KiB and batches over 100 suggestions are refused too.
+- The API has it too: `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/suggestions` lists suggestions, `POST …/damast/suggestions/apply` commits them (with the `content_version` of each one from the list), and [`mast pr suggestions`](https://github.com/damast-dev/mast) uses both. A token limited to some repositories or to public ones must cover the pull request's head repository.
 
 ### Its own name
 

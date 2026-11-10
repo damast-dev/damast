@@ -5,23 +5,35 @@ package damast
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
+	perm_model "forgejo.org/models/perm"
 	access_model "forgejo.org/models/perm/access"
 	user_model "forgejo.org/models/user"
 	"forgejo.org/modules/damast/suggestion"
 	"forgejo.org/modules/git"
 	"forgejo.org/modules/gitrepo"
+	"forgejo.org/modules/setting"
+	"forgejo.org/services/authz"
 )
+
+// MaxSuggestionSize is the largest suggestion block in bytes, GitHub's limit for a whole comment.
+const MaxSuggestionSize = 65536
+
+// ErrFileTooLarge is returned by ReadFileAt for files the web editor wouldn't open either.
+var ErrFileTooLarge = errors.New("file too large")
 
 // CanApplySuggestions reports whether doer may commit review suggestions to
 // the head branch of an open pull request: write access to the head branch
 // (own repository, or a fork that allows maintainer edits), and push rights if
-// the head branch is protected.
-func CanApplySuggestions(ctx context.Context, doer *user_model.User, pr *issues_model.PullRequest) (bool, error) {
+// the head branch is protected. reducer (nil if none) is the restriction of the
+// doer's token (public-only, specific repositories): the commit lands in the head
+// repository, so the token must grant write there, not only on the base repository.
+func CanApplySuggestions(ctx context.Context, doer *user_model.User, reducer authz.AuthorizationReducer, pr *issues_model.PullRequest) (bool, error) {
 	if doer == nil || pr.HasMerged || pr.Flow == issues_model.PullRequestFlowAGit {
 		return false, nil
 	}
@@ -36,6 +48,15 @@ func CanApplySuggestions(ctx context.Context, doer *user_model.User, pr *issues_
 	}
 	if pr.HeadRepo == nil || pr.HeadRepo.IsArchived || !pr.HeadRepo.CanEnableEditor() {
 		return false, nil
+	}
+	if reducer != nil {
+		mode, err := reducer.ReduceRepoAccess(ctx, pr.HeadRepo, perm_model.AccessModeWrite)
+		if err != nil {
+			return false, err
+		}
+		if mode < perm_model.AccessModeWrite {
+			return false, nil
+		}
 	}
 	perm, err := access_model.GetUserRepoPermission(ctx, pr.HeadRepo, doer)
 	if err != nil {
@@ -74,6 +95,9 @@ func ReadFileAt(gitRepo *git.Repository, commitID, path string) ([]byte, *git.Tr
 	if err != nil {
 		return nil, nil, err
 	}
+	if entry.Blob().Size() >= setting.UI.MaxDisplayFileSize {
+		return nil, entry, ErrFileTooLarge
+	}
 	r, err := entry.Blob().DataAsync()
 	if err != nil {
 		return nil, nil, err
@@ -86,11 +110,11 @@ func ReadFileAt(gitRepo *git.Repository, commitID, path string) ([]byte, *git.Tr
 // LoadSuggestion returns the suggestion of a code comment, or nil if it has none.
 func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, error) {
 	if c.Type != issues_model.CommentTypeCode {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no suggestion
 	}
 	lines, found, err := suggestion.Parse(c.Content)
 	if !found {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no suggestion
 	}
 	s := &Suggestion{Comment: c, New: lines}
 	switch {
@@ -99,6 +123,9 @@ func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, 
 		return s, nil
 	case c.Line <= 0:
 		s.Problem = "damast.suggestions.old_side"
+		return s, nil
+	case len(strings.Join(lines, "\n")) > MaxSuggestionSize:
+		s.Problem = "damast.suggestions.too_large"
 		return s, nil
 	}
 	if err := c.LoadIssue(ctx); err != nil {
@@ -122,7 +149,10 @@ func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, 
 	if err == nil {
 		s.Old, err = suggestion.Lines(content, int(c.Line), int(c.ExtraLinesCount)+1)
 	}
-	if err != nil || c.Invalidated {
+	switch {
+	case errors.Is(err, ErrFileTooLarge):
+		s.Problem = "damast.suggestions.too_large"
+	case err != nil || c.Invalidated:
 		s.Problem = "damast.suggestions.outdated"
 	}
 	return s, nil

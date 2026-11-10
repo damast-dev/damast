@@ -149,6 +149,7 @@
 	"damast.suggestions.multiple": "Only a comment with one suggestion can be applied",
 	"damast.suggestions.old_side": "Suggestions can only change lines of the new version",
 	"damast.suggestions.outdated": "Outdated",
+	"damast.suggestions.too_large": "Too large to apply",
 	"damast.suggestions.edited": "A suggestion was edited. Reload the page and try again.",
 	"damast.suggestions.err_not_allowed": "You can't push to the branch of this pull request.",
 	"damast.suggestions.err_closed": "This pull request is closed.",

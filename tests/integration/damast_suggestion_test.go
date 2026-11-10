@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -75,8 +76,14 @@ func damastReview(t *testing.T, token string, pr *issues_model.PullRequest, comm
 
 func damastApply(t *testing.T, token string, pr *issues_model.PullRequest, ids []int64, message string, status int) string {
 	t.Helper()
+	versions := map[int64]int{} // the versions a client listed before applying
+	for _, id := range ids {
+		if c, err := issues_model.GetCommentByID(git.DefaultContext, id); err == nil {
+			versions[id] = c.ContentVersion
+		}
+	}
 	resp := MakeRequest(t, NewRequestWithJSON(t, "POST", fmt.Sprintf("/api/v1/repos/user2/repo1/pulls/%d/damast/suggestions/apply", pr.Index),
-		&routers_repo.DamastApplySuggestionsOption{CommentIDs: ids, Message: message}).AddTokenAuth(token), status)
+		&routers_repo.DamastApplySuggestionsOption{CommentIDs: ids, Message: message, ContentVersions: versions}).AddTokenAuth(token), status)
 	if status != http.StatusOK {
 		return ""
 	}
@@ -163,8 +170,9 @@ func TestDamastSuggestions(t *testing.T) {
 
 			// web route as the owner
 			session.MakeRequest(t, NewRequestWithValues(t, "POST", fmt.Sprintf("/user2/repo1/pulls/%d/damast/suggestions/apply", pr.Index), map[string]string{
-				"comment_ids": fmt.Sprint(ids[0]),
-				"message":     "",
+				"comment_ids":      fmt.Sprint(ids[0]),
+				"content_versions": "0",
+				"message":          "",
 			}), http.StatusOK)
 			content, commit := damastHeadFile(t, pr, "a.txt")
 			assert.Equal(t, "one\nTWO\nthree\n", content)
@@ -193,7 +201,7 @@ func TestDamastSuggestions(t *testing.T) {
 			// someone pushes above the comments: they follow their lines
 			damastPush(t, pr, user2, "a.txt", "0\n1\n2\n3\n4\n5\n", "prepend")
 
-			ids := append(ids4, ids5...)
+			ids := slices.Concat(ids4, ids5)
 			damastApply(t, ownerToken, pr, ids, "Polish\n\nSigned-off-by: user2 <user2@example.com>", http.StatusOK)
 			a, commit := damastHeadFile(t, pr, "a.txt")
 			assert.Equal(t, "0\n1\ntwo-four\n", a)
