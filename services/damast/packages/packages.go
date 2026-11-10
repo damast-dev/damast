@@ -12,7 +12,6 @@ package packages
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 	"slices"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/json"
 	"forgejo.org/modules/log"
 	container_module "forgejo.org/modules/packages/container"
 	"forgejo.org/modules/setting"
@@ -69,7 +69,7 @@ func (g *Grant) deny() error {
 // NewGrant returns a Grant if doer has mode (read or write) on at least one repository of owner, or nil.
 func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model.User, taskID int64) (*Grant, error) {
 	if owner == nil || doer == nil || doer.IsGhost() {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 	}
 	if taskID > 0 {
 		task, err := actions_model.GetTaskByID(ctx, taskID)
@@ -78,19 +78,19 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 		}
 		repo, err := repo_model.GetRepositoryByID(ctx, task.RepoID)
 		if repo_model.IsErrRepoNotExist(err) {
-			return nil, nil // the run's repository is gone: plain Forgejo rules
+			return nil, nil //nolint:nilnil // the run's repository is gone: plain Forgejo rules
 		}
 		if err != nil {
 			return nil, err
 		}
 		// fork PRs never get package write, like GitHub (read is fine)
 		if repo.OwnerID != owner.ID || (task.IsForkPullRequest && mode >= perm.AccessModeWrite) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 		}
 		return &Grant{Mode: mode, Doer: doer, OwnerID: owner.ID, Task: task}, nil
 	}
 	if !doer.IsAccessAllowed(ctx) {
-		return nil, nil // prohibited, inactive or missing required 2FA: Forgejo grants no package access either
+		return nil, nil //nolint:nilnil // prohibited, inactive or missing required 2FA: Forgejo grants no package access either
 	}
 	has, err := db.GetEngine(ctx).Table("access").
 		Join("INNER", "repository", "repository.id = access.repo_id").
@@ -123,7 +123,7 @@ func ReadGrant(ctx context.Context, owner, doer *user_model.User, taskID int64, 
 func readableCond(ctx context.Context) (builder.Cond, error) {
 	g := grantFrom(ctx)
 	if g == nil || g.Mode != perm.AccessModeRead {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 	}
 	inheriting := builder.Select("package_id").From("damast_package_policy").Where(builder.Eq{"inherit_repo_access": true})
 	repos := make([]*repo_model.Repository, 0, 10)
@@ -223,7 +223,7 @@ func checkReadPackageID(ctx context.Context, packageID int64) error {
 // inherit, or is linked to a repository of another owner (npm links to any writable repo, transfers keep links).
 func inheritedRepo(ctx context.Context, p *packages_model.Package) (*repo_model.Repository, error) {
 	if p.RepoID == 0 {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no inherited repository
 	}
 	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
 	if err != nil || !inherit {
@@ -231,13 +231,13 @@ func inheritedRepo(ctx context.Context, p *packages_model.Package) (*repo_model.
 	}
 	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
 	if repo_model.IsErrRepoNotExist(err) {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no inherited repository
 	}
 	if err != nil {
 		return nil, err
 	}
 	if repo.OwnerID != p.OwnerID {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no inherited repository
 	}
 	return repo, nil
 }
@@ -405,7 +405,7 @@ func targetRepo(ctx context.Context, p *packages_model.Package, g *Grant, doer *
 			return repo, nil
 		}
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 }
 
 func byName(ctx context.Context, ownerID int64, name string) func() (*repo_model.Repository, error) {
