@@ -90,6 +90,8 @@
 					{{ctx.Locale.Tr "repo.pulls.data_broken"}}
 				</div>
 			{{else if .IsPullWorkInProgress}}
+				{{template "repo/damast/pull_draft_mergebox" .}}{{/* DAMAST: replaces the WIP item below */}}
+				{{if false}}
 				<div class="item toggle-wip" data-title="{{.Issue.Title}}" data-wip-prefixes="{{JsonUtils.EncodeToString .PullRequestWorkInProgressPrefixes}}" data-update-url="{{.Issue.Link}}/title">
 					<div class="flex-text-inline tw-flex-1">
 						{{svg "octicon-x"}}
@@ -101,6 +103,7 @@
 						</button>
 					{{end}}
 				</div>
+				{{end}}{{/* DAMAST: end of replaced WIP item */}}
 				{{template "repo/pulls/trust" .}}
 				{{template "repo/issue/view_content/update_branch_by_merge" $}}
 			{{else if .Issue.PullRequest.IsChecking}}

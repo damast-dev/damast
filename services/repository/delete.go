@@ -347,6 +347,10 @@ func DeleteRepositoryDirectly(ctx context.Context, repoID int64, opts DeleteRepo
 			return err
 		}
 
+		if err := damast.DeleteRepoPackagePolicies(ctx, repoID); err != nil { // DAMAST: repo-bound packages
+			return err
+		}
+
 		// unlink packages linked to this repository
 		return packages_model.UnlinkRepositoryFromAllPackages(ctx, repoID)
 	}); err != nil {

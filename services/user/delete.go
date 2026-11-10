@@ -142,6 +142,9 @@ func deleteUser(ctx context.Context, u *user_model.User, purge bool) (err error)
 	if err != nil {
 		return fmt.Errorf("update tracked_time user_id: %w", err)
 	}
+	if err = damast.DeleteOwnerPackageData(ctx, u.ID); err != nil { // DAMAST: repo-bound packages
+		return err
+	}
 
 	if err := auth_model.DeleteOAuth2RelictsByUserID(ctx, u.ID); err != nil {
 		return err
