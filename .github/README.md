@@ -34,7 +34,7 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Forgejo:** `Co-authored-by:` trailers show up as plain text at the bottom of the commit message. Pair programming, mob sessions and suggested changes all end up credited to one person.
 
-**On Damast:** every co-author appears next to the author, with avatar and a link to their profile, on the commit page and in every commit list. Co-authors without an account still show, with the avatar for their email. There is nothing to configure: write the trailer, Damast does the rest.
+**On Damast:** author and co-authors appear together as one overlapping avatar stack, like on GitHub, followed by their names ("Jonas Berg and 2 others" in lists, every name on the commit page). You see it on the commit page, on the latest commit above the file list, in the commit history, the commit graph, a pull request's Commits tab and its timeline. A co-author whose verified email belongs to an account links to that profile and shows under the account's name; everyone else, bots like `dependabot[bot]` included, shows with the name from the trailer and the avatar for their email. Accounts you aren't allowed to see stay unlinked. [`mast pr view <pr> commits`](https://github.com/damast-dev/mast) lists co-authors too. There is nothing to configure: write the trailer, Damast does the rest.
 
 ### Packages belong to their repository
 
@@ -129,7 +129,7 @@ v17.0.1-damast.2-rc.1
 The direction is GitHub's way of working, inside the limits of the drop-in promise: if a feature would need to change Forgejo's tables, it waits or finds another way.
 
 **Shipped**
-- Co-authors on commit pages and in commit lists
+- Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
 - Suggested changes in reviews: commit one or a batch, reviewers credited as co-authors
 - Damast's own name and logo
