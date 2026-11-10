@@ -88,6 +88,18 @@ Under the hood a draft is still a `WIP:` title (the first entry of `[repository.
 
 Not yet: file attachments in advisories, temporary private forks, requesting a CVE, CVSS 4.0 vectors, checking CWE IDs against the CWE list (today any `CWE-<number>` is accepted and `cwes[].name` is empty), and taking advisories along when you migrate a repository from another instance.
 
+### Suggested changes in reviews
+
+**On Forgejo:** a reviewer who knows the fix writes it into a comment, and the author copies it into their editor, commits and pushes. Small fixes take a round trip each.
+
+**On Damast:** write a ` ```suggestion ` block in a review comment on a line or a range of lines, like on GitHub. The "Suggest" button in the comment editor fills it with the commented lines for you.
+
+- The comment shows the suggestion as a small diff of the old and the new lines.
+- Whoever can push to the pull request's branch gets **Commit suggestion**, or **Add suggestion to batch** to collect several and commit them as one commit. That includes maintainers of a fork's pull request if its author allows edits by maintainers. Branch protection applies as for any push.
+- The commit message is "Apply suggestions from code review" (you can change it) and credits every reviewer whose suggestion is in it with a `Co-authored-by:` trailer, so they show up as co-authors.
+- Committed conversations are resolved. A suggestion whose lines changed in the meantime is outdated and can't be committed anymore; suggestions in one batch can't touch the same lines.
+- The API has it too: `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/suggestions` lists suggestions, `POST …/damast/suggestions/apply` commits them, and [`mast pr suggestions`](https://github.com/damast-dev/mast) uses both.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -135,6 +147,7 @@ What you lose:
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
 | File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
 | Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
+| Suggested changes | Suggestions stay in the comments as code blocks, and commits made from them keep their trailers. The buttons are gone, so the author applies them by hand again. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 | Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
 | Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
@@ -174,6 +187,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - Repo-bound packages: publish, download, Actions token, per-package switch, owner setting for new package names
 - File tree next to the code: folders load as you open them, clicks swap only the content
 - Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
+- Suggested changes in reviews: commit one or a batch, reviewers credited as co-authors
 - Damast's own name and logo
 - Security tab: security policy, private vulnerability reporting, repository security advisories, OSV export
 - Releases with release candidates, binaries for amd64 and arm64, Docker images

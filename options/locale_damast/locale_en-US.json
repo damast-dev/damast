@@ -137,5 +137,22 @@
 	"damast.security.mail.withdrawn": "%s withdrew the advisory.",
 	"damast.security.mail.commented": "%s commented:",
 	"damast.security.mail.added_collaborator": "%s added you as a collaborator on a private security advisory.",
-	"damast.security.mail.footer": "You get this e-mail because you can see this private security advisory of %s. Do not forward it."
+	"damast.security.mail.footer": "You get this e-mail because you can see this private security advisory of %s. Do not forward it.",
+	"damast.suggestions.title": "Suggested change",
+	"damast.suggestions.suggest": "Suggest a change to the commented lines",
+	"damast.suggestions.commit": "Commit suggestion",
+	"damast.suggestions.add_to_batch": "Add suggestion to batch",
+	"damast.suggestions.remove_from_batch": "Remove from batch",
+	"damast.suggestions.commit_batch": "Commit suggestions",
+	"damast.suggestions.message": "Commit message",
+	"damast.suggestions.commit_changes": "Commit changes",
+	"damast.suggestions.multiple": "Only a comment with one suggestion can be applied",
+	"damast.suggestions.old_side": "Suggestions can only change lines of the new version",
+	"damast.suggestions.outdated": "Outdated",
+	"damast.suggestions.edited": "A suggestion was edited. Reload the page and try again.",
+	"damast.suggestions.err_not_allowed": "You can't push to the branch of this pull request.",
+	"damast.suggestions.err_closed": "This pull request is closed.",
+	"damast.suggestions.err_invalid": "This comment has no suggestion that can be applied.",
+	"damast.suggestions.err_outdated": "The code changed since this suggestion was made, so it can't be applied anymore.",
+	"damast.suggestions.err_overlap": "Some suggestions in this batch change the same lines. Commit them one at a time."
 }

@@ -35,6 +35,7 @@ func NewFuncMap() template.FuncMap {
 
 		"DamastIsDraftPull": DamastIsDraftPull, // DAMAST: draft pull requests
 		"DamastPullTitle":   DamastPullTitle,   // DAMAST: draft pull requests
+		"DamastSuggestion":  DamastSuggestion,  // DAMAST: review suggestions
 
 		"ExecuteTemplate": func(ctx context.Context, tmplName string, args any) template.HTML {
 			h := HTMLRenderer()

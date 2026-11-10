@@ -137,5 +137,22 @@
 	"damast.security.mail.withdrawn": "%s hat den Sicherheitshinweis zurückgezogen.",
 	"damast.security.mail.commented": "%s hat kommentiert:",
 	"damast.security.mail.added_collaborator": "%s hat dich als mitwirkende Person zu einem privaten Sicherheitshinweis hinzugefügt.",
-	"damast.security.mail.footer": "Du bekommst diese E-Mail, weil du diesen privaten Sicherheitshinweis von %s sehen kannst. Leite sie nicht weiter."
+	"damast.security.mail.footer": "Du bekommst diese E-Mail, weil du diesen privaten Sicherheitshinweis von %s sehen kannst. Leite sie nicht weiter.",
+	"damast.suggestions.title": "Vorgeschlagene Änderung",
+	"damast.suggestions.suggest": "Änderung an den kommentierten Zeilen vorschlagen",
+	"damast.suggestions.commit": "Vorschlag committen",
+	"damast.suggestions.add_to_batch": "Vorschlag zum Stapel hinzufügen",
+	"damast.suggestions.remove_from_batch": "Aus dem Stapel entfernen",
+	"damast.suggestions.commit_batch": "Vorschläge committen",
+	"damast.suggestions.message": "Commit-Nachricht",
+	"damast.suggestions.commit_changes": "Änderungen committen",
+	"damast.suggestions.multiple": "Nur ein Kommentar mit genau einem Vorschlag kann übernommen werden",
+	"damast.suggestions.old_side": "Vorschläge können nur Zeilen der neuen Version ändern",
+	"damast.suggestions.outdated": "Veraltet",
+	"damast.suggestions.edited": "Ein Vorschlag wurde bearbeitet. Lade die Seite neu und versuche es noch einmal.",
+	"damast.suggestions.err_not_allowed": "Du kannst nicht auf den Branch dieses Pull-Requests pushen.",
+	"damast.suggestions.err_closed": "Dieser Pull-Request ist geschlossen.",
+	"damast.suggestions.err_invalid": "Dieser Kommentar enthält keinen Vorschlag, der übernommen werden kann.",
+	"damast.suggestions.err_outdated": "Der Code hat sich seit diesem Vorschlag geändert, deshalb kann er nicht mehr übernommen werden.",
+	"damast.suggestions.err_overlap": "Einige Vorschläge in diesem Stapel ändern dieselben Zeilen. Committe sie einzeln."
 }
