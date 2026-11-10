@@ -254,6 +254,6 @@ func DamastReadAccess(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 	case g != nil:
 		p.AccessMode = perm.AccessModeRead
-		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
+		ctx.AppendContextValue(damast_packages.GrantKey, g)
 	}
 }
