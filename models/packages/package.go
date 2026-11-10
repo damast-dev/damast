@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"forgejo.org/models/damast" // DAMAST:
 	"forgejo.org/models/db"
 	"forgejo.org/modules/util"
 
@@ -239,11 +240,17 @@ func DeletePackageByID(ctx context.Context, packageID int64) error {
 	if n == 0 && err == nil {
 		return ErrPackageNotExist
 	}
+	if err == nil { // DAMAST: repo-bound packages
+		err = damast.DeletePackagePolicy(ctx, packageID)
+	}
 	return err
 }
 
 // SetRepositoryLink sets the linked repository
 func SetRepositoryLink(ctx context.Context, packageID, repoID int64) error {
+	if err := damast.ResetInheritOnRelink(ctx, packageID, repoID); err != nil { // DAMAST: repo-bound packages
+		return err
+	}
 	n, err := db.GetEngine(ctx).ID(packageID).Cols("repo_id").Update(&Package{RepoID: repoID})
 	if n == 0 && err == nil {
 		return ErrPackageNotExist
@@ -252,6 +259,9 @@ func SetRepositoryLink(ctx context.Context, packageID, repoID int64) error {
 }
 
 func UnlinkRepository(ctx context.Context, packageID int64) error {
+	if err := damast.ResetInheritOnRelink(ctx, packageID, 0); err != nil { // DAMAST: repo-bound packages
+		return err
+	}
 	_, err := db.GetEngine(ctx).ID(packageID).Cols("repo_id").Update(&Package{RepoID: 0})
 	return err
 }
@@ -295,6 +305,11 @@ func GetPackageByName(ctx context.Context, ownerID int64, packageType Type, name
 	}
 	if !has {
 		return nil, ErrPackageNotExist
+	}
+	if DamastCheckRead != nil { // DAMAST: hidden packages look missing
+		if err := DamastCheckRead(ctx, p); err != nil {
+			return nil, err
+		}
 	}
 	return p, nil
 }

@@ -835,6 +835,7 @@ func registerRoutes(m *web.Route) {
 				m.Post("/rebuild", user_setting.RebuildCargoIndex)
 			})
 			m.Post("/chef/regenerate_keypair", user_setting.RegenerateChefKeyPair)
+			m.Post("/damast", user_setting.DamastPackagesPost) // DAMAST: owner package settings
 		}, packagesEnabled)
 
 		m.Group("/actions", func() {
@@ -1178,6 +1179,7 @@ func registerRoutes(m *web.Route) {
 						m.Post("/initialize", org.InitializeCargoIndex)
 						m.Post("/rebuild", org.RebuildCargoIndex)
 					})
+					m.Post("/damast", org.DamastPackagesPost) // DAMAST: owner package settings
 				}, packagesEnabled)
 			}, ctxDataSet("EnableOAuth2", setting.OAuth2.Enabled, "EnablePackages", setting.Packages.Enabled, "EnableQuota", setting.Quota.Enabled, "PageIsOrgSettings", true))
 		}, context.OrgAssignment(true, true))

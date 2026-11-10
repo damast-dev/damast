@@ -38,6 +38,9 @@ type PropertyValue struct {
 }
 
 func findPropertyValues(ctx context.Context, propertyName string, ownerID int64, name, version string, propertyFilter map[string]string) ([]*PropertyValue, error) {
+	if hidden, err := packages.DamastHidden(ctx, ownerID, packages.TypeConan, name); hidden || err != nil { // DAMAST: hidden packages look missing
+		return nil, err
+	}
 	var propsCond builder.Cond = builder.Eq{
 		"package_property.ref_type": packages.PropertyTypeFile,
 	}

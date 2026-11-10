@@ -42,11 +42,13 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Damast:** a package belongs to the repository it was built from, like on GitHub.
 
-- New packages link to their repository by themselves: from the Actions run that published them, from the repository URL in their metadata, or from their name.
-- Write access to the repository lets you publish. Read access lets you download, even from a private organization.
+- New packages link to their repository by themselves: from the Actions run that published them, from the repository URL in their metadata, or from their name. Archived repositories are read-only, so nothing is published through them and new packages don't link to them.
+- Write access to the repository lets you publish new versions of its packages. Read access lets you download from Conan, container, generic, Maven, npm and PyPI registries, even in a private organization. Registries with one index per owner (Debian, RPM, Cargo, ...) keep Forgejo's read rules, so their indexes can't leak other packages.
 - Workflows publish with their built-in token. Pull requests from forks can only read.
+- **New package names are for owners by default.** A new name is claimed for the whole user or organization, and some registries put it into one signed index per owner: a workflow that publishes `curl 99` to your Debian repository would reach everyone who installs from it. So out of the box only people who can publish for the owner (Forgejo's rule) create packages; repository writers and workflows publish new versions of packages that are already linked to their repository. Owners can open this up under *Settings → Packages → Who may create new packages*: then repository writers and workflows create new names too, but only in the registries GitHub Packages has (container, npm, Maven, NuGet, RubyGems) plus generic. GitHub has no Debian, RPM, PyPI, Cargo, Conan, pub, ... registry, so new names there always stay with the owner. The same setting is at `GET`/`PATCH /api/v1/damast/packages/{owner}/settings`.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
-- One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
+- The package API (`/api/v1/packages/{owner}`, and `mast package list|info`) lists exactly the packages you may read this way, with matching counts and pages. The owner's package pages on the web keep Forgejo's rule for now, because they show the profile or organization header that Forgejo hides from non-members. That includes the package pages the repository's Packages tab links to.
+- One switch per package turns this off (also at `GET`/`PATCH /api/v1/damast/packages/{owner}/{type}/{name}/settings`). Packages that existed before you switched keep Forgejo's rules. Unlinking a package, or linking it to another repository, turns the switch off: the new repository's people only count once an owner turns it on again. Deleting a package, its repository or its owner deletes these settings too.
 
 ### A file tree next to the code
 
@@ -117,8 +119,11 @@ What you lose:
 | File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
 | Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
+| Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
+
+Coming back to Damast later? Packages you published while on Forgejo are owner-only until you turn on "Inherit access from the linked repository" in their settings. If you dropped the `damast_*` tables, that goes for every package. If you kept them, the old packages keep their setting. The same goes for "Who may create new packages": without the tables it is back to owners only.
 
 ## Versions
 
@@ -139,7 +144,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 
 **Shipped**
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
-- Repo-bound packages: publish, download, Actions token, per-package switch
+- Repo-bound packages: publish, download, Actions token, per-package switch, owner setting for new package names
 - File tree next to the code: folders load as you open them, clicks swap only the content
 - Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Damast's own name and logo
