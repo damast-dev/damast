@@ -57,7 +57,8 @@
 								<div class="notifications-bottom-row tw-text-16 tw-py-0.5">
 									<span class="issue-title tw-break-anywhere">
 										{{if .Issue}}
-											{{RenderRefIssueTitle $.Context .Issue.Title}}
+											{{RenderRefIssueTitle $.Context (DamastPullTitle .Issue.Title .Issue.IsPull)}}
+											{{template "repo/damast/draft_badge" .Issue}}{{/* DAMAST: draft PR title without prefix, plus badge */}}
 										{{else}}
 											{{.Repository.FullName}}
 										{{end}}
