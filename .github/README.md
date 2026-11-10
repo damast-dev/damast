@@ -42,11 +42,51 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Damast:** a package belongs to the repository it was built from, like on GitHub.
 
-- New packages link to their repository by themselves: from the Actions run that published them, from the repository URL in their metadata, or from their name.
-- Write access to the repository lets you publish. Read access lets you download, even from a private organization.
+- New packages link to their repository by themselves: from the Actions run that published them, from the repository URL in their metadata, or from their name. Archived repositories are read-only, so nothing is published through them and new packages don't link to them.
+- Write access to the repository lets you publish new versions of its packages. Read access lets you download from Conan, container, generic, Maven, npm and PyPI registries, even in a private organization. Registries with one index per owner (Debian, RPM, Cargo, ...) keep Forgejo's read rules, so their indexes can't leak other packages.
 - Workflows publish with their built-in token. Pull requests from forks can only read.
+- **New package names are for owners by default.** A new name is claimed for the whole user or organization, and some registries put it into one signed index per owner: a workflow that publishes `curl 99` to your Debian repository would reach everyone who installs from it. So out of the box only people who can publish for the owner (Forgejo's rule) create packages; repository writers and workflows publish new versions of packages that are already linked to their repository. Owners can open this up under *Settings → Packages → Who may create new packages*: then repository writers and workflows create new names too, but only in the registries GitHub Packages has (container, npm, Maven, NuGet, RubyGems) plus generic. GitHub has no Debian, RPM, PyPI, Cargo, Conan, pub, ... registry, so new names there always stay with the owner. The same setting is at `GET`/`PATCH /api/v1/damast/packages/{owner}/settings`.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
-- One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
+- The package API (`/api/v1/packages/{owner}`, and `mast package list|info`) lists exactly the packages you may read this way, with matching counts and pages. The owner's package pages on the web keep Forgejo's rule for now, because they show the profile or organization header that Forgejo hides from non-members. That includes the package pages the repository's Packages tab links to.
+- One switch per package turns this off (also at `GET`/`PATCH /api/v1/damast/packages/{owner}/{type}/{name}/settings`). Packages that existed before you switched keep Forgejo's rules. Unlinking a package, or linking it to another repository, turns the switch off: the new repository's people only count once an owner turns it on again. Deleting a package, its repository or its owner deletes these settings too.
+
+### A file tree next to the code
+
+**On Forgejo:** the code view shows one folder at a time. To open a file three folders down, you click through three pages, and to look at its neighbour you click back up again. The only file tree is the one in pull request diffs.
+
+**On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. On the repository's start page it stays hidden until you open it, and blame pages keep their full width. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
+
+### Draft pull requests
+
+**On Forgejo:** a pull request is a draft when its title starts with `WIP:`. You type the prefix by hand, the prefix shows up in every list, and the only way to mark a pull request ready is to edit its title.
+
+**On Damast:** drafts work like on GitHub.
+
+- **Create pull request ▾** has a second option, **Create draft pull request**.
+- Drafts show a **Draft** badge in pull request lists, on the dashboard, in notifications and on project boards, and their title without the prefix (also in the page header, the browser tab and cross-references in the timeline).
+- The merge box of a draft has a **Ready for review** button. The sidebar has **Convert to draft**.
+- Converting a pull request to a draft cancels its scheduled auto merge, so marking it ready never merges it unasked.
+- Code owners are asked for review when a draft becomes ready, not while you're still working on it. You can still request reviews by hand at any time.
+- The API takes `"draft": true` when you create a pull request, and [`mast`](https://github.com/damast-dev/mast) has `mast pr create --draft`, `mast pr ready` and `mast pr draft`.
+
+Under the hood a draft is still a `WIP:` title (the first entry of `[repository.pull-request] WORK_IN_PROGRESS_PREFIXES`), so Forgejo sees exactly the same drafts.
+
+### Security advisories and private vulnerability reports
+
+**On Forgejo:** there is no private channel. Someone who finds a vulnerability opens a public issue, or hunts for an e-mail address. Maintainers have nowhere to prepare a fix in private, and nothing machine-readable to publish when it's out.
+
+**On Damast:** every repository has a **Security** tab, like on GitHub.
+
+- **Security policy.** Damast shows your `SECURITY.md`, from `.forgejo/`, `.gitea/`, `.github/`, the root or `docs/`.
+- **Private vulnerability reporting.** Switch it on in the Security tab, and anyone who can read the repository can report a vulnerability privately. Repository admins get an e-mail. A report can be accepted as a draft advisory or closed. To keep one account from flooding you, a reporter can have at most 3 open reports per repository and 10 reports a day.
+- **Security advisories.** Admins write drafts with severity, a CVSS 3.1 vector (the score is computed), CWE and CVE IDs, affected packages with vulnerable and patched versions, and credits. They discuss them in a private thread with the reporter and with people they add as collaborators, then publish or close them.
+- **OSV.** Published advisories are served as [OSV 1.6](https://ossf.github.io/osv-schema/) JSON, one by one and as a list per repository, so scanners can read them. Advisory IDs look like `DAMAST-7h2c-9xq4-m5vw`: random, so they never change when a repository is renamed or transferred, and they don't tell anyone how many private advisories exist.
+- **Private means private.** Until an advisory is published, only repository admins (including org owners and admin teams), site admins, the reporter and its collaborators can see it. Everyone else gets a `404`, on every page and API route. Drafts never show up in feeds, notifications, search, issue counters, webhooks or a reporter's profile, and mentioning someone in a draft doesn't notify them. The discussion stays private after publishing. In a private repository, even published advisories are only for people who can read it.
+- **API.** `/api/v1/repos/{owner}/{repo}/security-advisories` follows GitHub's REST API for repository advisories (list with `state`, `page` and `per_page`, create, update with `state` and `collaborating_users`, `/reports`), with GitHub's response fields (`cwes`, `cvss_severities`, `credits_detailed`, `publisher`, `submission`), plus `/osv` and `/comments`. `/api/v1/repos/{owner}/{repo}/private-vulnerability-reporting` turns private reporting on (`PUT`) and off (`DELETE`), as on GitHub. [`mast`](https://github.com/damast-dev/mast) has `mast security` and `mast advisory` commands for it.
+- **Archived repositories** keep their advisories readable, but nobody can change them, comment on them or report new vulnerabilities.
+- **Two things to know.** Advisories describe code. If a repository's Code unit is turned off, only its admins see the Security tab, and nobody else sees its advisories, not even published ones. Pull mirrors have a Security tab like any other repository, but their code comes from somewhere else. Report vulnerabilities to the original project, and switch private reporting on only if you maintain the mirror's code.
+
+Not yet: file attachments in advisories, temporary private forks, requesting a CVE, CVSS 4.0 vectors, checking CWE IDs against the CWE list (today any `CWE-<number>` is accepted and `cwes[].name` is empty), and taking advisories along when you migrate a repository from another instance.
 
 ### Suggested changes in reviews
 
@@ -105,10 +145,25 @@ What you lose:
 | Feature | After going back |
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
+| File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
+| Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Suggested changes | Suggestions stay in the comments as code blocks, and commits made from them keep their trailers. The buttons are gone, so the author applies them by hand again. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
+| Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
+| Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
+
+Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
+
+```sh
+curl -H "Authorization: token $TOKEN" \
+  https://git.example.com/api/v1/repos/OWNER/REPO/security-advisories/osv > OWNER-REPO-advisories.osv.json
+# or, for every advisory you can see, including drafts, in Damast's own format:
+mast advisory list --repo OWNER/REPO --json > OWNER-REPO-advisories.json
+```
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
+
+Coming back to Damast later? Packages you published while on Forgejo are owner-only until you turn on "Inherit access from the linked repository" in their settings. If you dropped the `damast_*` tables, that goes for every package. If you kept them, the old packages keep their setting. The same goes for "Who may create new packages": without the tables it is back to owners only.
 
 ## Versions
 
@@ -129,15 +184,19 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 
 **Shipped**
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
-- Repo-bound packages: publish, download, Actions token, per-package switch
+- Repo-bound packages: publish, download, Actions token, per-package switch, owner setting for new package names
+- File tree next to the code: folders load as you open them, clicks swap only the content
+- Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Suggested changes in reviews: commit one or a batch, reviewers credited as co-authors
 - Damast's own name and logo
+- Security tab: security policy, private vulnerability reporting, repository security advisories, OSV export
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 
 **Next**
 - Co-authors in the contribution graph and on profiles, so pairing counts there too
 - An automated test on every Forgejo sync: switch a real instance to Damast and back, and check that Forgejo starts cleanly
 - [`mast`](https://github.com/damast-dev/mast) commands for Damast's features, starting with packages
+- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data, credits the credited user accepts first (as on GitHub; today only users with a public profile can be credited), CVSS 4.0, CWE IDs checked against the CWE list (with names), advisories carried over when a repository is migrated from another instance
 
 **Your idea?** What do you miss from GitHub? [Open an issue](https://github.com/damast-dev/damast/issues/new) and tell us what your team trips over.
 

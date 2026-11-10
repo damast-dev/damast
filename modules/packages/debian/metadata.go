@@ -77,6 +77,9 @@ func ParsePackage(r io.Reader) (*Package, error) {
 		if err != nil {
 			return nil, err
 		}
+		if hd.Size < 0 { // DAMAST: GO-2026-6905, blakesmith/ar panics on negative member sizes (no upstream fix)
+			return nil, ErrDamastInvalidArchive
+		}
 
 		if strings.HasPrefix(hd.Name, controlTar) {
 			var inner io.Reader

@@ -7,13 +7,15 @@
 // doer may write to some repository of the owner. Every package create/upload path then calls OnWrite inside its
 // transaction, where the package is known, and OnWrite rejects the request unless the doer may write to the
 // package's repository. Without a Grant, OnWrite only auto-links new packages (plain Forgejo permissions apply).
+// A Grant creates new package names only where the owner allows it and GitHub has the registry (mayCreate).
 package packages
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 
 	actions_model "forgejo.org/models/actions"
 	"forgejo.org/models/damast"
@@ -24,10 +26,14 @@ import (
 	repo_model "forgejo.org/models/repo"
 	"forgejo.org/models/unit"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/json"
 	"forgejo.org/modules/log"
 	container_module "forgejo.org/modules/packages/container"
 	"forgejo.org/modules/setting"
 	"forgejo.org/modules/util"
+	"forgejo.org/services/authz"
+
+	"xorm.io/builder"
 )
 
 type grantKey struct{}
@@ -37,11 +43,16 @@ var GrantKey = grantKey{}
 
 // Grant is provisional access (read or write); OnWrite / CheckRead decide per package.
 type Grant struct {
-	Mode perm.AccessMode
-	Doer *user_model.User
-	Task *actions_model.ActionTask // set when authenticated with an Actions token
+	Mode    perm.AccessMode
+	Doer    *user_model.User
+	OwnerID int64
+	Task    *actions_model.ActionTask // set when authenticated with an Actions token
+	// Reducer limits repository permissions like the token does elsewhere (public-only tokens); nil = none
+	Reducer authz.AuthorizationReducer
 
 	denied bool
+	mu     sync.Mutex
+	read   map[int64]error // CheckRead per package ID: metadata requests ask once per version and file
 }
 
 // Denied reports whether OnWrite rejected this request.
@@ -49,13 +60,16 @@ func (g *Grant) Denied() bool { return g.denied }
 
 func (g *Grant) deny() error {
 	g.denied = true
+	if g.Mode == perm.AccessModeRead {
+		return packages_model.ErrPackageNotExist // handlers answer it exactly like a missing package
+	}
 	return util.ErrPermissionDenied
 }
 
 // NewGrant returns a Grant if doer has mode (read or write) on at least one repository of owner, or nil.
 func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model.User, taskID int64) (*Grant, error) {
 	if owner == nil || doer == nil || doer.IsGhost() {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 	}
 	if taskID > 0 {
 		task, err := actions_model.GetTaskByID(ctx, taskID)
@@ -63,14 +77,20 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 			return nil, err
 		}
 		repo, err := repo_model.GetRepositoryByID(ctx, task.RepoID)
+		if repo_model.IsErrRepoNotExist(err) {
+			return nil, nil //nolint:nilnil // the run's repository is gone: plain Forgejo rules
+		}
 		if err != nil {
 			return nil, err
 		}
 		// fork PRs never get package write, like GitHub (read is fine)
 		if repo.OwnerID != owner.ID || (task.IsForkPullRequest && mode >= perm.AccessModeWrite) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 		}
-		return &Grant{Mode: mode, Doer: doer, Task: task}, nil
+		return &Grant{Mode: mode, Doer: doer, OwnerID: owner.ID, Task: task}, nil
+	}
+	if !doer.IsAccessAllowed(ctx) {
+		return nil, nil //nolint:nilnil // prohibited, inactive or missing required 2FA: Forgejo grants no package access either
 	}
 	has, err := db.GetEngine(ctx).Table("access").
 		Join("INNER", "repository", "repository.id = access.repo_id").
@@ -79,12 +99,61 @@ func NewGrant(ctx context.Context, mode perm.AccessMode, owner, doer *user_model
 	if err != nil || !has {
 		return nil, err
 	}
-	return &Grant{Mode: mode, Doer: doer}, nil
+	return &Grant{Mode: mode, Doer: doer, OwnerID: owner.ID}, nil
+}
+
+// ReadGrant returns a read Grant for doer on owner's packages (nil if doer reads no repository of owner),
+// and checks pd, the package version a route already loaded: ErrPackageNotExist if doer may not read it.
+func ReadGrant(ctx context.Context, owner, doer *user_model.User, taskID int64, reducer authz.AuthorizationReducer, pd *packages_model.PackageDescriptor) (*Grant, error) {
+	g, err := NewGrant(ctx, perm.AccessModeRead, owner, doer, taskID)
+	if err != nil || g == nil {
+		return nil, err
+	}
+	g.Reducer = reducer
+	if pd != nil {
+		if err := checkRead(ctx, g, pd.Package); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
+}
+
+// readableCond limits package searches under a read Grant to what CheckRead lets through: packages of the
+// owner that inherit access from a repository of the same owner that the reader may read.
+func readableCond(ctx context.Context) (builder.Cond, error) {
+	g := grantFrom(ctx)
+	if g == nil || g.Mode != perm.AccessModeRead {
+		return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
+	}
+	inheriting := builder.Select("package_id").From("damast_package_policy").Where(builder.Eq{"inherit_repo_access": true})
+	repos := make([]*repo_model.Repository, 0, 10)
+	if err := db.GetEngine(ctx).Where(builder.Eq{"owner_id": g.OwnerID}).
+		And(builder.In("id", builder.Select("repo_id").From("package").Where(builder.Eq{"owner_id": g.OwnerID}.And(builder.In("id", inheriting))))).
+		Find(&repos); err != nil {
+		return nil, err
+	}
+	readable := make([]int64, 0, len(repos))
+	for _, repo := range repos {
+		rp, err := repoPermission(ctx, g, g.Doer, repo)
+		if err != nil {
+			return nil, err
+		}
+		if rp.CanRead(unit.TypePackages) {
+			readable = append(readable, repo.ID)
+		}
+	}
+	return builder.Eq{"package.owner_id": g.OwnerID}.And(builder.In("package.repo_id", readable), builder.In("package.id", inheriting)), nil
 }
 
 func init() {
 	packages_model.DamastCheckRead = CheckRead
 	packages_model.DamastCheckReadFile = OnReadFile
+	packages_model.DamastCheckReadPackageID = checkReadPackageID
+	packages_model.DamastReadableCond = readableCond
+	packages_model.DamastReadGrant = func(ctx context.Context) bool {
+		g := grantFrom(ctx)
+		return g != nil && g.Mode == perm.AccessModeRead
+	}
 }
 
 // CheckRead rejects reads under a provisional read Grant unless the reader may read the package's
@@ -94,26 +163,28 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 	if g == nil || g.Mode != perm.AccessModeRead {
 		return nil
 	}
-	if p.RepoID == 0 {
-		return g.deny()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err, ok := g.read[p.ID]; ok {
+		return err
 	}
-	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+	if g.read == nil {
+		g.read = map[int64]error{}
+	}
+	err := checkRead(ctx, g, p)
+	g.read[p.ID] = err
+	return err
+}
+
+func checkRead(ctx context.Context, g *Grant, p *packages_model.Package) error {
+	repo, err := inheritedRepo(ctx, p)
 	if err != nil {
 		return err
 	}
-	if !inherit {
+	if repo == nil {
 		return g.deny()
 	}
-	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
-	if err != nil {
-		return err
-	}
-	var rp access_model.Permission
-	if g.Task != nil {
-		rp, err = access_model.GetActionRepoPermission(ctx, repo, g.Task)
-	} else {
-		rp, err = access_model.GetUserRepoPermission(ctx, repo, g.Doer)
-	}
+	rp, err := repoPermission(ctx, g, g.Doer, repo)
 	if err != nil {
 		return err
 	}
@@ -124,7 +195,8 @@ func CheckRead(ctx context.Context, p *packages_model.Package) error {
 }
 
 // OnReadFile is CheckRead for file downloads.
-// shortcut: loads version and package per file (only under a read grant), cache per request if it shows up in profiles.
+// shortcut: still loads version and package per file (two primary-key reads, only under a read grant; the
+// permission decision itself is cached per request), cache them too if it shows up in profiles.
 func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
 		return nil
@@ -133,11 +205,41 @@ func OnReadFile(ctx context.Context, pf *packages_model.PackageFile) error {
 	if err != nil {
 		return err
 	}
-	p, err := packages_model.GetPackageByID(ctx, pv.PackageID)
+	return checkReadPackageID(ctx, pv.PackageID)
+}
+
+func checkReadPackageID(ctx context.Context, packageID int64) error {
+	if g := grantFrom(ctx); g == nil || g.Mode != perm.AccessModeRead {
+		return nil
+	}
+	p, err := packages_model.GetPackageByID(ctx, packageID)
 	if err != nil {
 		return err
 	}
 	return CheckRead(ctx, p)
+}
+
+// inheritedRepo returns the repository whose permissions apply to p, or nil when p is not linked, doesn't
+// inherit, or is linked to a repository of another owner (npm links to any writable repo, transfers keep links).
+func inheritedRepo(ctx context.Context, p *packages_model.Package) (*repo_model.Repository, error) {
+	if p.RepoID == 0 {
+		return nil, nil //nolint:nilnil // no inherited repository
+	}
+	inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+	if err != nil || !inherit {
+		return nil, err
+	}
+	repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
+	if repo_model.IsErrRepoNotExist(err) {
+		return nil, nil //nolint:nilnil // no inherited repository
+	}
+	if err != nil {
+		return nil, err
+	}
+	if repo.OwnerID != p.OwnerID {
+		return nil, nil //nolint:nilnil // no inherited repository
+	}
+	return repo, nil
 }
 
 func grantFrom(ctx context.Context) *Grant {
@@ -145,14 +247,21 @@ func grantFrom(ctx context.Context) *Grant {
 	return g
 }
 
-func canWrite(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (bool, error) {
-	var p access_model.Permission
-	var err error
-	if g != nil && g.Task != nil {
-		p, err = access_model.GetActionRepoPermission(ctx, repo, g.Task)
-	} else {
-		p, err = access_model.GetUserRepoPermission(ctx, repo, doer)
+func repoPermission(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (access_model.Permission, error) {
+	switch {
+	case g != nil && g.Task != nil:
+		return access_model.GetActionRepoPermission(ctx, repo, g.Task)
+	case g != nil && g.Reducer != nil:
+		return access_model.GetUserRepoPermissionWithReducer(ctx, repo, doer, g.Reducer)
 	}
+	return access_model.GetUserRepoPermission(ctx, repo, doer)
+}
+
+func canWrite(ctx context.Context, g *Grant, doer *user_model.User, repo *repo_model.Repository) (bool, error) {
+	if repo.IsArchived {
+		return false, nil // archived repositories are read-only in Forgejo, their packages too
+	}
+	p, err := repoPermission(ctx, g, doer, repo)
 	if err != nil {
 		return false, err
 	}
@@ -174,19 +283,12 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 		if g == nil {
 			return nil // owner-level access, Forgejo behaviour
 		}
-		if p.RepoID == 0 {
-			return g.deny()
-		}
-		inherit, err := damast.InheritsRepoAccess(ctx, p.ID)
+		repo, err := inheritedRepo(ctx, p)
 		if err != nil {
 			return err
 		}
-		if !inherit {
+		if repo == nil {
 			return g.deny()
-		}
-		repo, err := repo_model.GetRepositoryByID(ctx, p.RepoID)
-		if err != nil {
-			return err
 		}
 		ok, err := canWrite(ctx, g, doer, repo)
 		if err != nil {
@@ -201,6 +303,16 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 	if g == nil && p.Type == packages_model.TypeContainer {
 		// Forgejo auto-links containers itself (annotation, label, image name) once the manifest arrives
 		return damast.SetInheritRepoAccess(ctx, p.ID, true)
+	}
+
+	if g != nil {
+		ok, err := mayCreate(ctx, p)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return g.deny()
+		}
 	}
 
 	repo, err := targetRepo(ctx, p, g, doer, metadata)
@@ -225,6 +337,23 @@ func OnWrite(ctx context.Context, p *packages_model.Package, created bool, doer 
 	}
 	log.Info("Damast: package %d linked to repository %s", p.ID, repo.FullName())
 	return damast.SetInheritRepoAccess(ctx, p.ID, true)
+}
+
+// NewNameTypes are the registries where repository writers and Actions runs may create new package names, if
+// the owner allows it: the ones GitHub Packages has (container, npm, Maven, NuGet, RubyGems) plus generic.
+// GitHub has no PyPI, Cargo, Debian, ... registry; there, and in every registry with one signed index per
+// owner, a new name stays an owner decision as in Forgejo.
+var NewNameTypes = []packages_model.Type{
+	packages_model.TypeContainer, packages_model.TypeNpm, packages_model.TypeMaven,
+	packages_model.TypeNuGet, packages_model.TypeRubyGems, packages_model.TypeGeneric,
+}
+
+// mayCreate reports whether provisional (repository) write may create package p.
+func mayCreate(ctx context.Context, p *packages_model.Package) (bool, error) {
+	if !slices.Contains(NewNameTypes, p.Type) {
+		return false, nil
+	}
+	return damast.RepoWritersMayCreatePackages(ctx, p.OwnerID)
 }
 
 // OnWriteVersion is OnWrite for paths that add files to an existing version.
@@ -276,7 +405,7 @@ func targetRepo(ctx context.Context, p *packages_model.Package, g *Grant, doer *
 			return repo, nil
 		}
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // nil grant: plain Forgejo rules apply
 }
 
 func byName(ctx context.Context, ownerID int64, name string) func() (*repo_model.Repository, error) {
