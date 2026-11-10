@@ -1127,6 +1127,7 @@ func Routes() *web.Route {
 				})
 
 				m.Get("/{ball_type:tarball|zipball|bundle}/*", reqRepoReader(unit.TypeCode), repo.DownloadArchive)
+				damastSecurityAdvisoryRoutes(m) // DAMAST: security advisories
 			}, repoAndOwnerAssignment("username", "reponame"), repoAccess(), checkTokenPublicOnly())
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryRepository))
 

@@ -71,6 +71,23 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 Under the hood a draft is still a `WIP:` title (the first entry of `[repository.pull-request] WORK_IN_PROGRESS_PREFIXES`), so Forgejo sees exactly the same drafts.
 
+### Security advisories and private vulnerability reports
+
+**On Forgejo:** there is no private channel. Someone who finds a vulnerability opens a public issue, or hunts for an e-mail address. Maintainers have nowhere to prepare a fix in private, and nothing machine-readable to publish when it's out.
+
+**On Damast:** every repository has a **Security** tab, like on GitHub.
+
+- **Security policy.** Damast shows your `SECURITY.md`, from `.forgejo/`, `.gitea/`, `.github/`, the root or `docs/`.
+- **Private vulnerability reporting.** Switch it on in the Security tab, and anyone who can read the repository can report a vulnerability privately. Repository admins get an e-mail. A report can be accepted as a draft advisory or closed. To keep one account from flooding you, a reporter can have at most 3 open reports per repository and 10 reports a day.
+- **Security advisories.** Admins write drafts with severity, a CVSS 3.1 vector (the score is computed), CWE and CVE IDs, affected packages with vulnerable and patched versions, and credits. They discuss them in a private thread with the reporter and with people they add as collaborators, then publish or close them.
+- **OSV.** Published advisories are served as [OSV 1.6](https://ossf.github.io/osv-schema/) JSON, one by one and as a list per repository, so scanners can read them. Advisory IDs look like `DAMAST-7h2c-9xq4-m5vw`: random, so they never change when a repository is renamed or transferred, and they don't tell anyone how many private advisories exist.
+- **Private means private.** Until an advisory is published, only repository admins (including org owners and admin teams), site admins, the reporter and its collaborators can see it. Everyone else gets a `404`, on every page and API route. Drafts never show up in feeds, notifications, search, issue counters, webhooks or a reporter's profile, and mentioning someone in a draft doesn't notify them. The discussion stays private after publishing. In a private repository, even published advisories are only for people who can read it.
+- **API.** `/api/v1/repos/{owner}/{repo}/security-advisories` follows GitHub's REST API for repository advisories (list with `state`, `page` and `per_page`, create, update with `state` and `collaborating_users`, `/reports`), with GitHub's response fields (`cwes`, `cvss_severities`, `credits_detailed`, `publisher`, `submission`), plus `/osv` and `/comments`. `/api/v1/repos/{owner}/{repo}/private-vulnerability-reporting` turns private reporting on (`PUT`) and off (`DELETE`), as on GitHub. [`mast`](https://github.com/damast-dev/mast) has `mast security` and `mast advisory` commands for it.
+- **Archived repositories** keep their advisories readable, but nobody can change them, comment on them or report new vulnerabilities.
+- **Two things to know.** Advisories describe code. If a repository's Code unit is turned off, only its admins see the Security tab, and nobody else sees its advisories, not even published ones. Pull mirrors have a Security tab like any other repository, but their code comes from somewhere else. Report vulnerabilities to the original project, and switch private reporting on only if you maintain the mirror's code.
+
+Not yet: file attachments in advisories, temporary private forks, requesting a CVE, CVSS 4.0 vectors, checking CWE IDs against the CWE list (today any `CWE-<number>` is accepted and `cwes[].name` is empty), and taking advisories along when you migrate a repository from another instance.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -120,6 +137,16 @@ What you lose:
 | Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 | Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
+| Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
+
+Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
+
+```sh
+curl -H "Authorization: token $TOKEN" \
+  https://git.example.com/api/v1/repos/OWNER/REPO/security-advisories/osv > OWNER-REPO-advisories.osv.json
+# or, for every advisory you can see, including drafts, in Damast's own format:
+mast advisory list --repo OWNER/REPO --json > OWNER-REPO-advisories.json
+```
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
 
@@ -148,12 +175,14 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - File tree next to the code: folders load as you open them, clicks swap only the content
 - Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Damast's own name and logo
+- Security tab: security policy, private vulnerability reporting, repository security advisories, OSV export
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 
 **Next**
 - Co-authors in the contribution graph and on profiles, so pairing counts there too
 - An automated test on every Forgejo sync: switch a real instance to Damast and back, and check that Forgejo starts cleanly
 - [`mast`](https://github.com/damast-dev/mast) commands for Damast's features, starting with packages
+- Security, phase 2: attachments in advisories, temporary private forks for fixes, Dependabot-style alerts from published OSV data, credits the credited user accepts first (as on GitHub; today only users with a public profile can be credited), CVSS 4.0, CWE IDs checked against the CWE list (with names), advisories carried over when a repository is migrated from another instance
 
 **Your idea?** What do you miss from GitHub? [Open an issue](https://github.com/damast-dev/damast/issues/new) and tell us what your team trips over.
 

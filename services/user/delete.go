@@ -133,6 +133,9 @@ func deleteUser(ctx context.Context, u *user_model.User, purge bool) (err error)
 	); err != nil {
 		return fmt.Errorf("deleteBeans: %w", err)
 	}
+	if err = damast.DeleteUserSecurityData(ctx, u.ID); err != nil { // DAMAST: security advisories
+		return err
+	}
 
 	// Retain the fact that time was tracked, but set DB's `user_id` to NULL.
 	_, err = e.Table(&issues_model.TrackedTime{}).Where("user_id = ?", u.ID).Update(map[string]any{"user_id": nil})

@@ -15042,6 +15042,110 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/private-vulnerability-reporting": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Check if private vulnerability reporting is enabled (repository admins)",
+        "operationId": "repoGetPrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastPrivateReporting"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Enable private vulnerability reporting (repository admins)",
+        "operationId": "repoEnablePrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/responses/empty"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/responses/error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Disable private vulnerability reporting (repository admins)",
+        "operationId": "repoDisablePrivateVulnerabilityReporting",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/responses/empty"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/responses/error"
+          }
+        }
+      }
+    },
     "/repos/{owner}/{repo}/pulls": {
       "get": {
         "produces": [
@@ -17563,6 +17667,577 @@
         "responses": {
           "200": {
             "$ref": "#/responses/UserList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "List the repository's security advisories the user may see",
+        "operationId": "repoListSecurityAdvisories",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "only advisories in this state (triage, draft, published, closed, withdrawn)",
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page number of results to return (1-based)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results (GitHub's name; limit works too)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastSecurityAdvisoryList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Create a draft security advisory (repository admins)",
+        "operationId": "repoCreateSecurityAdvisory",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastAdvisoryCreateOption"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "$ref": "#/responses/DamastSecurityAdvisory"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/osv": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "List the repository's published and withdrawn security advisories in OSV format",
+        "operationId": "repoListSecurityAdvisoriesOSV",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastOSVList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/reports": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Report a vulnerability privately (needs private vulnerability reporting)",
+        "operationId": "repoReportVulnerability",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastAdvisoryReportOption"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "$ref": "#/responses/DamastSecurityAdvisory"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          },
+          "429": {
+            "$ref": "#/responses/error"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/{ghsa_id}": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Get a security advisory",
+        "operationId": "repoGetSecurityAdvisory",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastSecurityAdvisory"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "patch": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Edit a security advisory, its collaborators or its state, all or nothing (repository admins)",
+        "operationId": "repoEditSecurityAdvisory",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastAdvisoryUpdateOption"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastSecurityAdvisory"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "List the private discussion of a security advisory",
+        "operationId": "repoListSecurityAdvisoryComments",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "page number of results to return (1-based)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results (GitHub's name; limit works too)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "page size of results",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastAdvisoryCommentList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Comment in the private discussion of a security advisory",
+        "operationId": "repoCreateSecurityAdvisoryComment",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastAdvisoryCommentOption"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "$ref": "#/responses/DamastAdvisoryComment"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/{ghsa_id}/comments/{comment_id}": {
+      "delete": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Delete a comment of the private discussion (its author or a repository admin)",
+        "operationId": "repoDeleteSecurityAdvisoryComment",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "id of the comment",
+            "name": "comment_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/responses/empty"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      },
+      "patch": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Edit a comment of the private discussion (its author or a repository admin)",
+        "operationId": "repoEditSecurityAdvisoryComment",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "id of the comment",
+            "name": "comment_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastAdvisoryCommentOption"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastAdvisoryComment"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/security-advisories/{ghsa_id}/osv": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Get a published or withdrawn security advisory in OSV format",
+        "operationId": "repoGetSecurityAdvisoryOSV",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "id of the advisory (DAMAST-...)",
+            "name": "ghsa_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastOSV"
           },
           "404": {
             "$ref": "#/responses/notFound"
@@ -26200,6 +26875,570 @@
       },
       "x-go-package": "forgejo.org/modules/structs"
     },
+    "DamastAdvisoryCVSS": {
+      "type": "object",
+      "title": "APICVSS is part of the security advisories API.",
+      "properties": {
+        "score": {
+          "type": "number",
+          "format": "double",
+          "x-go-name": "Score"
+        },
+        "vector_string": {
+          "type": "string",
+          "x-go-name": "VectorString"
+        }
+      },
+      "x-go-name": "APICVSS",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCVSSSeverities": {
+      "type": "object",
+      "title": "APICVSSSeverities is part of the security advisories API. Damast scores CVSS 3.1 only, so cvss_v4 is null.",
+      "properties": {
+        "cvss_v3": {
+          "$ref": "#/definitions/DamastAdvisoryCVSS"
+        },
+        "cvss_v4": {
+          "$ref": "#/definitions/DamastAdvisoryCVSS"
+        }
+      },
+      "x-go-name": "APICVSSSeverities",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCWE": {
+      "type": "object",
+      "title": "APICWE is part of the security advisories API. Name is empty: Damast has no copy of the CWE list.",
+      "properties": {
+        "cwe_id": {
+          "type": "string",
+          "x-go-name": "CWEID"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-name": "APICWE",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryComment": {
+      "type": "object",
+      "title": "APIComment is a comment of the private discussion.",
+      "properties": {
+        "body": {
+          "type": "string",
+          "x-go-name": "Body"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "CreatedAt"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "ID"
+        },
+        "user": {
+          "$ref": "#/definitions/User"
+        }
+      },
+      "x-go-name": "APIComment",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCommentOption": {
+      "type": "object",
+      "title": "APICommentOption is the body of POST .../comments.",
+      "properties": {
+        "body": {
+          "type": "string",
+          "x-go-name": "Body"
+        }
+      },
+      "x-go-name": "APICommentOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCreateOption": {
+      "type": "object",
+      "title": "APICreateOption is the body of POST /security-advisories.",
+      "properties": {
+        "credits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCredit"
+          },
+          "x-go-name": "Credits"
+        },
+        "cve_id": {
+          "type": "string",
+          "x-go-name": "CveID"
+        },
+        "cvss_vector_string": {
+          "type": "string",
+          "x-go-name": "CVSSVectorString"
+        },
+        "cwe_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "CWEIDs"
+        },
+        "description": {
+          "type": "string",
+          "x-go-name": "Description"
+        },
+        "severity": {
+          "type": "string",
+          "x-go-name": "Severity"
+        },
+        "summary": {
+          "type": "string",
+          "x-go-name": "Summary"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryVulnerabilityOption"
+          },
+          "x-go-name": "Vulnerabilities"
+        }
+      },
+      "x-go-name": "APICreateOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCredit": {
+      "type": "object",
+      "title": "APICredit is part of the security advisories API.",
+      "properties": {
+        "login": {
+          "type": "string",
+          "x-go-name": "Login"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        }
+      },
+      "x-go-name": "APICredit",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryCreditDetail": {
+      "type": "object",
+      "title": "APICreditDetail is part of the security advisories API. Credits need no invitation, so state is \"accepted\".",
+      "properties": {
+        "state": {
+          "type": "string",
+          "x-go-name": "State"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        },
+        "user": {
+          "$ref": "#/definitions/User"
+        }
+      },
+      "x-go-name": "APICreditDetail",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryIdentifier": {
+      "type": "object",
+      "title": "APIIdentifier is part of the security advisories API.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        },
+        "value": {
+          "type": "string",
+          "x-go-name": "Value"
+        }
+      },
+      "x-go-name": "APIIdentifier",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryPackage": {
+      "type": "object",
+      "title": "APIPackage is part of the security advisories API.",
+      "properties": {
+        "ecosystem": {
+          "type": "string",
+          "x-go-name": "Ecosystem"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-name": "APIPackage",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryReportOption": {
+      "type": "object",
+      "title": "APIReportOption is the body of POST /security-advisories/reports.",
+      "properties": {
+        "cvss_vector_string": {
+          "type": "string",
+          "x-go-name": "CVSSVectorString"
+        },
+        "cwe_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "CWEIDs"
+        },
+        "description": {
+          "type": "string",
+          "x-go-name": "Description"
+        },
+        "severity": {
+          "type": "string",
+          "x-go-name": "Severity"
+        },
+        "summary": {
+          "type": "string",
+          "x-go-name": "Summary"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryVulnerabilityOption"
+          },
+          "x-go-name": "Vulnerabilities"
+        }
+      },
+      "x-go-name": "APIReportOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisorySubmission": {
+      "type": "object",
+      "title": "APISubmission is part of the security advisories API.",
+      "properties": {
+        "accepted": {
+          "type": "boolean",
+          "x-go-name": "Accepted"
+        }
+      },
+      "x-go-name": "APISubmission",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryUpdateOption": {
+      "type": "object",
+      "title": "APIUpdateOption is the body of PATCH /security-advisories/{id}. Missing fields stay unchanged.",
+      "properties": {
+        "collaborating_users": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "CollaboratingUsers"
+        },
+        "credits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCredit"
+          },
+          "x-go-name": "Credits"
+        },
+        "cve_id": {
+          "type": "string",
+          "x-go-name": "CveID"
+        },
+        "cvss_vector_string": {
+          "type": "string",
+          "x-go-name": "CVSSVectorString"
+        },
+        "cwe_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "CWEIDs"
+        },
+        "description": {
+          "type": "string",
+          "x-go-name": "Description"
+        },
+        "severity": {
+          "type": "string",
+          "x-go-name": "Severity"
+        },
+        "state": {
+          "type": "string",
+          "x-go-name": "State"
+        },
+        "summary": {
+          "type": "string",
+          "x-go-name": "Summary"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryVulnerabilityOption"
+          },
+          "x-go-name": "Vulnerabilities"
+        }
+      },
+      "x-go-name": "APIUpdateOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryVulnerability": {
+      "type": "object",
+      "title": "APIVulnerability is part of the security advisories API.",
+      "properties": {
+        "package": {
+          "$ref": "#/definitions/DamastAdvisoryPackage"
+        },
+        "patched_versions": {
+          "type": "string",
+          "x-go-name": "PatchedVersions"
+        },
+        "vulnerable_version_range": {
+          "type": "string",
+          "x-go-name": "VulnerableVersionRange"
+        }
+      },
+      "x-go-name": "APIVulnerability",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastAdvisoryVulnerabilityOption": {
+      "type": "object",
+      "title": "APIVulnerabilityOption is one affected product in a create or update request.",
+      "properties": {
+        "package": {
+          "$ref": "#/definitions/DamastAdvisoryPackage"
+        },
+        "patched_versions": {
+          "type": "string",
+          "x-go-name": "PatchedVersions"
+        },
+        "vulnerable_version_range": {
+          "type": "string",
+          "x-go-name": "VulnerableVersionRange"
+        }
+      },
+      "x-go-name": "APIVulnerabilityOption",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSV": {
+      "type": "object",
+      "title": "OSV is an advisory in the Open Source Vulnerability format.",
+      "properties": {
+        "affected": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVAffected"
+          },
+          "x-go-name": "Affected"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Aliases"
+        },
+        "credits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVCredit"
+          },
+          "x-go-name": "Credits"
+        },
+        "database_specific": {
+          "type": "object",
+          "additionalProperties": {},
+          "x-go-name": "DatabaseSpecific"
+        },
+        "details": {
+          "type": "string",
+          "x-go-name": "Details"
+        },
+        "id": {
+          "type": "string",
+          "x-go-name": "ID"
+        },
+        "modified": {
+          "type": "string",
+          "x-go-name": "Modified"
+        },
+        "published": {
+          "type": "string",
+          "x-go-name": "Published"
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVReference"
+          },
+          "x-go-name": "References"
+        },
+        "schema_version": {
+          "type": "string",
+          "x-go-name": "SchemaVersion"
+        },
+        "severity": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVSeverity"
+          },
+          "x-go-name": "Severity"
+        },
+        "summary": {
+          "type": "string",
+          "x-go-name": "Summary"
+        },
+        "withdrawn": {
+          "type": "string",
+          "x-go-name": "Withdrawn"
+        }
+      },
+      "x-go-name": "OSV",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVAffected": {
+      "type": "object",
+      "title": "OSVAffected is part of the security advisories API.",
+      "properties": {
+        "database_specific": {
+          "type": "object",
+          "additionalProperties": {},
+          "x-go-name": "DatabaseSpecific"
+        },
+        "package": {
+          "$ref": "#/definitions/DamastOSVPackage"
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVRange"
+          },
+          "x-go-name": "Ranges"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Versions"
+        }
+      },
+      "x-go-name": "OSVAffected",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVCredit": {
+      "type": "object",
+      "title": "OSVCredit is part of the security advisories API.",
+      "properties": {
+        "contact": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Contact"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        }
+      },
+      "x-go-name": "OSVCredit",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVEvent": {
+      "type": "object",
+      "title": "OSVEvent is part of the security advisories API.",
+      "properties": {
+        "fixed": {
+          "type": "string",
+          "x-go-name": "Fixed"
+        },
+        "introduced": {
+          "type": "string",
+          "x-go-name": "Introduced"
+        },
+        "last_affected": {
+          "type": "string",
+          "x-go-name": "LastAffected"
+        }
+      },
+      "x-go-name": "OSVEvent",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVPackage": {
+      "type": "object",
+      "title": "OSVPackage is part of the security advisories API.",
+      "properties": {
+        "ecosystem": {
+          "type": "string",
+          "x-go-name": "Ecosystem"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-name": "OSVPackage",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVRange": {
+      "type": "object",
+      "title": "OSVRange is part of the security advisories API.",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastOSVEvent"
+          },
+          "x-go-name": "Events"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        }
+      },
+      "x-go-name": "OSVRange",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVReference": {
+      "type": "object",
+      "title": "OSVReference is part of the security advisories API.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        },
+        "url": {
+          "type": "string",
+          "x-go-name": "URL"
+        }
+      },
+      "x-go-name": "OSVReference",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastOSVSeverity": {
+      "type": "object",
+      "title": "OSVSeverity is part of the security advisories API.",
+      "properties": {
+        "score": {
+          "type": "string",
+          "x-go-name": "Score"
+        },
+        "type": {
+          "type": "string",
+          "x-go-name": "Type"
+        }
+      },
+      "x-go-name": "OSVSeverity",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
     "DamastOwnerPackageSettings": {
       "type": "object",
       "title": "DamastOwnerPackageSettings are an owner's Damast package settings.",
@@ -26227,6 +27466,151 @@
         }
       },
       "x-go-package": "forgejo.org/routers/api/v1/packages"
+    },
+    "DamastPrivateReporting": {
+      "type": "object",
+      "title": "APIPrivateReporting is the body of GET /private-vulnerability-reporting, as on GitHub.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "x-go-name": "Enabled"
+        }
+      },
+      "x-go-name": "APIPrivateReporting",
+      "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastSecurityAdvisory": {
+      "type": "object",
+      "title": "APIAdvisory is a repository security advisory.",
+      "properties": {
+        "author": {
+          "$ref": "#/definitions/User"
+        },
+        "closed_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "ClosedAt"
+        },
+        "collaborating_users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/User"
+          },
+          "x-go-name": "CollaboratingUsers"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "CreatedAt"
+        },
+        "credits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCredit"
+          },
+          "x-go-name": "Credits"
+        },
+        "credits_detailed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCreditDetail"
+          },
+          "x-go-name": "CreditsDetailed"
+        },
+        "cve_id": {
+          "type": "string",
+          "x-go-name": "CveID"
+        },
+        "cvss": {
+          "$ref": "#/definitions/DamastAdvisoryCVSS"
+        },
+        "cvss_severities": {
+          "$ref": "#/definitions/DamastAdvisoryCVSSSeverities"
+        },
+        "cwe_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "CWEIDs"
+        },
+        "cwes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryCWE"
+          },
+          "x-go-name": "CWEs"
+        },
+        "description": {
+          "type": "string",
+          "x-go-name": "Description"
+        },
+        "ghsa_id": {
+          "type": "string",
+          "x-go-name": "GhsaID"
+        },
+        "html_url": {
+          "type": "string",
+          "x-go-name": "HTMLURL"
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryIdentifier"
+          },
+          "x-go-name": "Identifiers"
+        },
+        "osv_url": {
+          "type": "string",
+          "x-go-name": "OSVURL"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "PublishedAt"
+        },
+        "publisher": {
+          "$ref": "#/definitions/User"
+        },
+        "severity": {
+          "type": "string",
+          "x-go-name": "Severity"
+        },
+        "state": {
+          "type": "string",
+          "x-go-name": "State"
+        },
+        "submission": {
+          "$ref": "#/definitions/DamastAdvisorySubmission"
+        },
+        "summary": {
+          "type": "string",
+          "x-go-name": "Summary"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "UpdatedAt"
+        },
+        "url": {
+          "type": "string",
+          "x-go-name": "URL"
+        },
+        "vulnerabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DamastAdvisoryVulnerability"
+          },
+          "x-go-name": "Vulnerabilities"
+        },
+        "withdrawn_at": {
+          "type": "string",
+          "format": "date-time",
+          "x-go-name": "WithdrawnAt"
+        }
+      },
+      "x-go-name": "APIAdvisory",
+      "x-go-package": "forgejo.org/services/damast/security"
     },
     "DeleteEmailOption": {
       "description": "DeleteEmailOption options when deleting email addresses",
@@ -32151,6 +33535,36 @@
         }
       }
     },
+    "DamastAdvisoryComment": {
+      "description": "DamastAdvisoryComment",
+      "schema": {
+        "$ref": "#/definitions/DamastAdvisoryComment"
+      }
+    },
+    "DamastAdvisoryCommentList": {
+      "description": "DamastAdvisoryCommentList",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/DamastAdvisoryComment"
+        }
+      }
+    },
+    "DamastOSV": {
+      "description": "DamastOSV",
+      "schema": {
+        "$ref": "#/definitions/DamastOSV"
+      }
+    },
+    "DamastOSVList": {
+      "description": "DamastOSVList",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/DamastOSV"
+        }
+      }
+    },
     "DamastOwnerPackageSettings": {
       "description": "DamastOwnerPackageSettings",
       "schema": {
@@ -32161,6 +33575,27 @@
       "description": "DamastPackageSettings",
       "schema": {
         "$ref": "#/definitions/DamastPackageSettings"
+      }
+    },
+    "DamastPrivateReporting": {
+      "description": "DamastPrivateReporting",
+      "schema": {
+        "$ref": "#/definitions/DamastPrivateReporting"
+      }
+    },
+    "DamastSecurityAdvisory": {
+      "description": "DamastSecurityAdvisory",
+      "schema": {
+        "$ref": "#/definitions/DamastSecurityAdvisory"
+      }
+    },
+    "DamastSecurityAdvisoryList": {
+      "description": "DamastSecurityAdvisoryList",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/DamastSecurityAdvisory"
+        }
       }
     },
     "DeployKey": {
@@ -33250,6 +34685,12 @@
     },
     "conflict": {
       "description": "APIConflict is a conflict empty response"
+    },
+    "damastParameterBodies": {
+      "description": "damastParameterBodies makes go-swagger include the request bodies (not actually a response).",
+      "schema": {
+        "$ref": "#/definitions/DamastAdvisoryCommentOption"
+      }
     },
     "empty": {
       "description": "APIEmpty is an empty response"

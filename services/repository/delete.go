@@ -215,6 +215,9 @@ func DeleteRepositoryDirectly(ctx context.Context, repoID int64, opts DeleteRepo
 		); err != nil {
 			return fmt.Errorf("deleteBeans: %w", err)
 		}
+		if err := damast.DeleteRepoSecurityData(ctx, repoID); err != nil { // DAMAST: security advisories
+			return err
+		}
 
 		if !opts.KeepMigrationBeans {
 			if err := db.DeleteBeans(ctx,
