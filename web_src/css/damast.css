@@ -1,4 +1,22 @@
-/* Damast-only styles. Loaded last from index.css. */
+/* DAMAST: own styles, imported once (last) from index.css. */
+
+/* GitHub-style overlapping avatar stack: author first and on top, co-authors behind. */
+.damast-avatar-stack > * { position: relative; display: inline-flex; border-radius: var(--border-radius); }
+.damast-avatar-stack > * img { box-shadow: 0 0 0 2px var(--color-box-body); }
+.damast-avatar-stack > *:nth-child(1) { z-index: 5; }
+.damast-avatar-stack > *:nth-child(2) { z-index: 4; }
+.damast-avatar-stack > *:nth-child(3) { z-index: 3; }
+.damast-avatar-stack > *:nth-child(4) { z-index: 2; }
+.damast-avatar-stack > *:nth-child(5) { z-index: 1; }
+.damast-avatar-stack-20 > * + * { margin-inline-start: -8px; }
+.damast-avatar-stack-28 > * + * { margin-inline-start: -12px; }
+.damast-coauthor-more { margin-inline-start: 4px !important; color: var(--color-text-light-2); }
+.damast-coauthor-others { text-decoration: underline dotted; cursor: default; }
+.damast-avatar-stack-24 > * + * { margin-inline-start: -10px; }
+/* Narrow author columns (PR commits tab, repo home, graph): keep the stack, cut the names with an ellipsis. */
+.damast-authors { min-width: 0; max-width: 100%; }
+.damast-avatar-stack { flex-shrink: 0; }
+.damast-authors-list .damast-author-names { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* MAST-17: file tree sidebar in the code view (templates/repo/damast/file_tree.tmpl) */
 .damast-file-tree {

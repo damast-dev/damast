@@ -42,6 +42,7 @@
 						{{end}}
 					</span>
 					<span class="author tw-flex tw-items-center tw-mr-2">
+						{{$damastCo := DamastCoAuthors ctx $commit.Commit}}{{if $damastCo}}{{$damastName := $commit.Commit.Author.Name}}{{if and $commit.User $commit.User.FullName DefaultShowFullName}}{{$damastName = $commit.User.FullName}}{{end}}{{template "repo/damast/authors" (dict "Co" $damastCo "User" $commit.User "Name" $damastName "Email" $commit.Commit.Author.Email "Size" 20 "Mode" "list")}}{{else}}{{/* DAMAST: co-author stack */}}
 						{{$userName := $commit.Commit.Author.Name}}
 						{{if $commit.User}}
 							{{if and $commit.User.FullName DefaultShowFullName}}
@@ -53,6 +54,7 @@
 							<span class="tw-mr-1">{{ctx.AvatarUtils.AvatarByEmail $commit.Commit.Author.Email $userName}}</span>
 							{{$userName}}
 						{{end}}
+						{{end}}{{/* DAMAST: */}}
 					</span>
 					<span class="time tw-flex tw-items-center">{{DateUtils.FullTime $commit.Date}}</span>
 				{{end}}
