@@ -63,9 +63,9 @@ func TestLines(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"b", "c"}, got)
 	_, err = Lines([]byte("a\n"), 1, 2)
-	assert.ErrorIs(t, err, ErrOutOfRange)
+	require.ErrorIs(t, err, ErrOutOfRange)
 	_, err = Lines(nil, 1, 1)
-	assert.ErrorIs(t, err, ErrOutOfRange)
+	require.ErrorIs(t, err, ErrOutOfRange)
 }
 
 func TestReplace(t *testing.T) {

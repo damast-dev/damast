@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -200,7 +201,7 @@ func TestDamastSuggestions(t *testing.T) {
 			// someone pushes above the comments: they follow their lines
 			damastPush(t, pr, user2, "a.txt", "0\n1\n2\n3\n4\n5\n", "prepend")
 
-			ids := append(ids4, ids5...)
+			ids := slices.Concat(ids4, ids5)
 			damastApply(t, ownerToken, pr, ids, "Polish\n\nSigned-off-by: user2 <user2@example.com>", http.StatusOK)
 			a, commit := damastHeadFile(t, pr, "a.txt")
 			assert.Equal(t, "0\n1\ntwo-four\n", a)

@@ -110,11 +110,11 @@ func ReadFileAt(gitRepo *git.Repository, commitID, path string) ([]byte, *git.Tr
 // LoadSuggestion returns the suggestion of a code comment, or nil if it has none.
 func LoadSuggestion(ctx context.Context, c *issues_model.Comment) (*Suggestion, error) {
 	if c.Type != issues_model.CommentTypeCode {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no suggestion
 	}
 	lines, found, err := suggestion.Parse(c.Content)
 	if !found {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no suggestion
 	}
 	s := &Suggestion{Comment: c, New: lines}
 	switch {
