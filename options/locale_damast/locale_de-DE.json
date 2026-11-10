@@ -154,5 +154,6 @@
 	"damast.suggestions.err_closed": "Dieser Pull-Request ist geschlossen.",
 	"damast.suggestions.err_invalid": "Dieser Kommentar enthält keinen Vorschlag, der übernommen werden kann.",
 	"damast.suggestions.err_outdated": "Der Code hat sich seit diesem Vorschlag geändert, deshalb kann er nicht mehr übernommen werden.",
-	"damast.suggestions.err_overlap": "Einige Vorschläge in diesem Stapel ändern dieselben Zeilen. Committe sie einzeln."
+	"damast.suggestions.err_overlap": "Einige Vorschläge in diesem Stapel ändern dieselben Zeilen. Committe sie einzeln.",
+	"damast.suggestions.err_edited": "Ein Vorschlag wurde bearbeitet. Lade die Seite neu und versuche es noch einmal."
 }

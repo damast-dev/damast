@@ -15645,6 +15645,114 @@
         }
       }
     },
+    "/repos/{owner}/{repo}/pulls/{index}/damast/suggestions": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "List the suggested changes in a pull request's submitted reviews (Damast)",
+        "operationId": "repoDamastListSuggestions",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "index of the pull request",
+            "name": "index",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastSuggestionList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/pulls/{index}/damast/suggestions/apply": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Commit suggested changes to the pull request's head branch as one commit (Damast)",
+        "operationId": "repoDamastApplySuggestions",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "index of the pull request",
+            "name": "index",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DamastApplySuggestionsOption"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DamastApplySuggestionsResult"
+          },
+          "403": {
+            "$ref": "#/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          },
+          "409": {
+            "$ref": "#/responses/error"
+          },
+          "422": {
+            "$ref": "#/responses/validationError"
+          }
+        }
+      }
+    },
     "/repos/{owner}/{repo}/pulls/{index}/files": {
       "get": {
         "produces": [
@@ -27223,6 +27331,45 @@
       "x-go-name": "APIVulnerabilityOption",
       "x-go-package": "forgejo.org/services/damast/security"
     },
+    "DamastApplySuggestionsOption": {
+      "type": "object",
+      "title": "DamastApplySuggestionsOption selects the suggestions to commit.",
+      "properties": {
+        "comment_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x-go-name": "CommentIDs"
+        },
+        "content_versions": {
+          "description": "ContentVersions maps comment IDs to the content_version the client has shown; edited comments are refused.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x-go-name": "ContentVersions"
+        },
+        "message": {
+          "type": "string",
+          "x-go-name": "Message"
+        }
+      },
+      "x-go-package": "forgejo.org/routers/api/v1/repo"
+    },
+    "DamastApplySuggestionsResult": {
+      "type": "object",
+      "title": "DamastApplySuggestionsResult is the commit that applied the suggestions.",
+      "properties": {
+        "commit": {
+          "type": "string",
+          "x-go-name": "Commit"
+        }
+      },
+      "x-go-package": "forgejo.org/routers/api/v1/repo"
+    },
     "DamastOSV": {
       "type": "object",
       "title": "OSV is an advisory in the Open Source Vulnerability format.",
@@ -27611,6 +27758,78 @@
       },
       "x-go-name": "APIAdvisory",
       "x-go-package": "forgejo.org/services/damast/security"
+    },
+    "DamastSuggestion": {
+      "type": "object",
+      "title": "DamastSuggestion is a review suggestion in the Damast API.",
+      "properties": {
+        "applicable": {
+          "type": "boolean",
+          "x-go-name": "Applicable"
+        },
+        "author": {
+          "type": "string",
+          "x-go-name": "Author"
+        },
+        "comment_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "CommentID"
+        },
+        "content_version": {
+          "description": "ContentVersion counts edits of the comment; pass it back in content_versions to refuse edited suggestions.",
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "ContentVersion"
+        },
+        "end_line": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "EndLine"
+        },
+        "html_url": {
+          "type": "string",
+          "x-go-name": "HTMLURL"
+        },
+        "new_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "New"
+        },
+        "old_lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "x-go-name": "Old"
+        },
+        "path": {
+          "type": "string",
+          "x-go-name": "Path"
+        },
+        "problem": {
+          "description": "Problem is why it can't be applied: \"multiple\", \"old_side\" or \"outdated\"; empty otherwise.",
+          "type": "string",
+          "x-go-name": "Problem"
+        },
+        "resolved": {
+          "type": "boolean",
+          "x-go-name": "Resolved"
+        },
+        "review_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "ReviewID"
+        },
+        "start_line": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "StartLine"
+        }
+      },
+      "x-go-package": "forgejo.org/routers/api/v1/repo"
     },
     "DeleteEmailOption": {
       "description": "DeleteEmailOption options when deleting email addresses",
@@ -33550,6 +33769,12 @@
         }
       }
     },
+    "DamastApplySuggestionsResult": {
+      "description": "DamastApplySuggestionsResult",
+      "schema": {
+        "$ref": "#/definitions/DamastApplySuggestionsResult"
+      }
+    },
     "DamastOSV": {
       "description": "DamastOSV",
       "schema": {
@@ -33595,6 +33820,15 @@
         "type": "array",
         "items": {
           "$ref": "#/definitions/DamastSecurityAdvisory"
+        }
+      }
+    },
+    "DamastSuggestionList": {
+      "description": "DamastSuggestionList",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/DamastSuggestion"
         }
       }
     },
@@ -34690,6 +34924,12 @@
       "description": "damastParameterBodies makes go-swagger include the request bodies (not actually a response).",
       "schema": {
         "$ref": "#/definitions/DamastAdvisoryCommentOption"
+      }
+    },
+    "damastSuggestionParameterBodies": {
+      "description": "damastSuggestionParameterBodies makes go-swagger include the request body (not actually a response).",
+      "schema": {
+        "$ref": "#/definitions/DamastApplySuggestionsOption"
       }
     },
     "empty": {
