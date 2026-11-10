@@ -136,6 +136,7 @@
 </div>
 <div class="ui attached segment tw-flex tw-items-center tw-justify-between tw-py-1 commit-header-row tw-flex-wrap {{$class}}">
 		<div class="tw-flex tw-items-center author">
+			{{$damastCo := DamastCoAuthors ctx .Commit}}{{if $damastCo}}{{template "repo/damast/authors" (dict "Co" $damastCo "User" .Author "Name" (or (and .Author .Author.FullName) .Commit.Author.Name) "Email" .Commit.Author.Email "Size" 28 "Mode" "header")}}{{else}}{{/* DAMAST: co-author stack */}}
 			{{if .Author}}
 				{{ctx.AvatarUtils.Avatar .Author 28 "tw-mr-2"}}
 				{{if .Author.FullName}}
@@ -147,7 +148,7 @@
 				{{ctx.AvatarUtils.AvatarByEmail .Commit.Author.Email .Commit.Author.Email 28 "tw-mr-2"}}
 				<strong>{{.Commit.Author.Name}}</strong>
 			{{end}}
-			{{template "repo/damast/coauthors" (dict "Commit" .Commit "Size" 28 "Names" true)}}{{/* DAMAST: */}}
+			{{end}}{{/* DAMAST: */}}
 			<span class="text grey tw-ml-2" id="authored-time">{{DateUtils.TimeSince .Commit.Author.When}}</span>
 			{{if or (ne .Commit.Committer.Name .Commit.Author.Name) (ne .Commit.Committer.Email .Commit.Author.Email)}}
 				<span class="tw-ml-2">•</span>
