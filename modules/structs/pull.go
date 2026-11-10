@@ -88,6 +88,8 @@ type CreatePullRequestOption struct {
 	Labels    []int64  `json:"labels"`
 	// swagger:strfmt date-time
 	Deadline *time.Time `json:"due_date"`
+	// Create the pull request as a draft: the first work-in-progress prefix is added to the title
+	Draft bool `json:"draft"` // DAMAST: draft pull requests
 }
 
 // EditPullRequestOption options when modify pull request

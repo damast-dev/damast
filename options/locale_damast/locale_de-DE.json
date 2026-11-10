@@ -15,5 +15,12 @@
 	"damast.file_tree.hide": "Dateibaum ausblenden",
 	"damast.file_tree.expand": "Ordner aufklappen",
 	"damast.file_tree.collapse": "Ordner zuklappen",
-	"damast.file_tree.more": "%s weitere…"
+	"damast.file_tree.more": "%s weitere…",
+	"damast.drafts.create": "Pull-Request als Entwurf erstellen",
+	"damast.drafts.create_help": "Kann erst gemergt werden, wenn er als bereit zum Review markiert ist. Dann werden auch die Code-Owner um ein Review gebeten.",
+	"damast.drafts.more_options": "Weitere Möglichkeiten zum Erstellen",
+	"damast.drafts.still_draft": "Dieser Pull-Request ist noch ein Entwurf.",
+	"damast.drafts.ready_help": "„Bereit zum Review“ entfernt das Titel-Präfix <code>%s</code> und bittet die Code-Owner um ein Review.",
+	"damast.drafts.ready": "Bereit zum Review",
+	"damast.drafts.convert": "In Entwurf umwandeln"
 }

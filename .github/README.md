@@ -54,6 +54,21 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 
 **On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. On the repository's start page it stays hidden until you open it, and blame pages keep their full width. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
 
+### Draft pull requests
+
+**On Forgejo:** a pull request is a draft when its title starts with `WIP:`. You type the prefix by hand, the prefix shows up in every list, and the only way to mark a pull request ready is to edit its title.
+
+**On Damast:** drafts work like on GitHub.
+
+- **Create pull request ▾** has a second option, **Create draft pull request**.
+- Drafts show a **Draft** badge in pull request lists, on the dashboard, in notifications and on project boards, and their title without the prefix (also in the page header, the browser tab and cross-references in the timeline).
+- The merge box of a draft has a **Ready for review** button. The sidebar has **Convert to draft**.
+- Converting a pull request to a draft cancels its scheduled auto merge, so marking it ready never merges it unasked.
+- Code owners are asked for review when a draft becomes ready, not while you're still working on it. You can still request reviews by hand at any time.
+- The API takes `"draft": true` when you create a pull request, and [`mast`](https://github.com/damast-dev/mast) has `mast pr create --draft`, `mast pr ready` and `mast pr draft`.
+
+Under the hood a draft is still a `WIP:` title (the first entry of `[repository.pull-request] WORK_IN_PROGRESS_PREFIXES`), so Forgejo sees exactly the same drafts.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -100,6 +115,7 @@ What you lose:
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
 | File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
+| Draft pull requests | Drafts stay drafts and still can't be merged. Their titles show the `WIP:` prefix again, and you mark them ready by removing it. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
@@ -125,6 +141,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
 - File tree next to the code: folders load as you open them, clicks swap only the content
+- Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Damast's own name and logo
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 
