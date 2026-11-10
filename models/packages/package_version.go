@@ -136,6 +136,11 @@ func getVersionByNameAndVersion(ctx context.Context, ownerID int64, packageType 
 	if len(pvs) == 0 {
 		return nil, ErrPackageNotExist
 	}
+	if DamastCheckReadPackageID != nil { // DAMAST: hidden packages look missing
+		if err := DamastCheckReadPackageID(ctx, pvs[0].PackageID); err != nil {
+			return nil, err
+		}
+	}
 	return pvs[0], nil
 }
 
@@ -160,6 +165,13 @@ func GetVersionsByPackageName(ctx context.Context, ownerID int64, packageType Ty
 		},
 		IsInternal: optional.Some(false),
 	})
+	if err == nil && len(pvs) > 0 && DamastCheckReadPackageID != nil { // DAMAST: hidden packages look missing
+		if err := DamastCheckReadPackageID(ctx, pvs[0].PackageID); errors.Is(err, ErrPackageNotExist) {
+			return nil, nil
+		} else if err != nil {
+			return nil, err
+		}
+	}
 	return pvs, err
 }
 
@@ -340,6 +352,9 @@ func SearchVersions(ctx context.Context, opts *PackageSearchOptions) ([]*Package
 		Where(opts.ToConds())
 
 	opts.configureOrderBy(sess)
+	if err := damastLimit(ctx, sess); err != nil { // DAMAST: repo-bound packages
+		return nil, 0, err
+	}
 
 	if opts.Paginator != nil {
 		sess = db.SetSessionPagination(sess, opts)
@@ -366,6 +381,9 @@ func SearchLatestVersions(ctx context.Context, opts *PackageSearchOptions) ([]*P
 		Where(builder.In("package_version.id", in))
 
 	opts.configureOrderBy(sess)
+	if err := damastLimit(ctx, sess); err != nil { // DAMAST: repo-bound packages
+		return nil, 0, err
+	}
 
 	if opts.Paginator != nil {
 		sess = db.SetSessionPagination(sess, opts)
