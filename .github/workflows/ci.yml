@@ -38,6 +38,43 @@ jobs:
       - name: Integration tests (sqlite)
         run: make 'test-sqlite#TestDamast'
 
+  # Lint and gofmt only what a PR changes; upstream code is Forgejo's responsibility (skipped on sync PRs).
+  lint:
+    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'sync/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Base revision
+        id: base
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          echo "rev=$(git merge-base HEAD "origin/${{ github.base_ref }}")" >> "$GITHUB_OUTPUT"
+      - name: gofmt (changed Go files)
+        run: |
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "${{ steps.base.outputs.rev }}" HEAD -- '*.go')
+          [[ ${#files[@]} -eq 0 ]] && exit 0
+          bad=$(gofmt -l "${files[@]}")
+          [[ -z $bad ]] || { echo "::error::not gofmt-formatted: $bad"; exit 1; }
+      - name: golangci-lint (new issues only)
+        run: |
+          pkg=$(sed -nE 's/^GOLANGCI_LINT_PACKAGE \?= ([^ ]+).*/\1/p' Makefile) # same version as Forgejo
+          go run "$pkg" run --build-tags 'sqlite sqlite_unlock_notify' --new-from-rev "${{ steps.base.outputs.rev }}" ./...
+
+  # Known vulnerabilities that the code actually reaches, in Damast's and Forgejo's dependencies.
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run "$(sed -nE 's/^GOVULNCHECK_PACKAGE \?= ([^ ]+).*/\1/p' Makefile)" ./...
+
   # Upstream suites of the areas Damast hooks into (packages: models/packages, services/packages,
   # routers/api/packages, routers/web/user/package.go), so a Damast hook can't break Forgejo behaviour silently.
   # Runs on go.mod's toolchain: some upstream package tests pin compressed bytes that newer Go versions change.
