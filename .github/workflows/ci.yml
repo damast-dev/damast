@@ -73,5 +73,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go run "$(sed -nE 's/^GOVULNCHECK_PACKAGE \?= ([^ ]+).*/\1/p' Makefile)" ./...
+      - name: govulncheck (fails on reachable findings not listed in .github/govulncheck-ignore.txt)
+        run: |
+          set +e
+          go run "$(sed -nE 's/^GOVULNCHECK_PACKAGE \?= ([^ ]+).*/\1/p' Makefile)" ./... | tee vuln.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          [[ $rc -eq 0 ]] && exit 0
+          [[ $rc -eq 3 ]] || { echo "::error::govulncheck failed to run (exit $rc)"; exit "$rc"; }
+          new=$(grep -oE '^Vulnerability #[0-9]+: GO-[0-9]+-[0-9]+' vuln.txt | awk '{print $3}' \
+            | grep -vxF -f <(grep -oE '^GO-[0-9]+-[0-9]+' .github/govulncheck-ignore.txt) || true)
+          [[ -z $new ]] || { echo "::error::unhandled vulnerabilities: $new"; exit 1; }
 
