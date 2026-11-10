@@ -146,20 +146,12 @@ func ToOSV(ctx context.Context, repo *repo_model.Repository, a *damast.SecurityA
 		}
 		o.Affected = append(o.Affected, af)
 	}
-	if len(a.Credits) > 0 {
-		ids := make([]int64, 0, len(a.Credits))
-		for _, c := range a.Credits {
-			ids = append(ids, c.UserID)
-		}
-		users, err := LoadUsers(ctx, ids...)
-		if err != nil {
-			return nil, err
-		}
-		for _, c := range a.Credits {
-			if u := users[c.UserID]; !u.IsGhost() {
-				o.Credits = append(o.Credits, OSVCredit{Name: u.GetDisplayName(), Contact: []string{u.HTMLURL()}, Type: strings.ToUpper(c.Type)})
-			}
-		}
+	credits, err := PublicCredits(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range credits {
+		o.Credits = append(o.Credits, OSVCredit{Name: c.User.GetDisplayName(), Contact: []string{c.User.HTMLURL()}, Type: strings.ToUpper(c.Type)})
 	}
 	return o, nil
 }

@@ -8,7 +8,9 @@ import (
 	"net/http"
 
 	"forgejo.org/models/damast"
+	access_model "forgejo.org/models/perm/access"
 	user_model "forgejo.org/models/user"
+	"forgejo.org/modules/log"
 	"forgejo.org/modules/util"
 	"forgejo.org/modules/web"
 	"forgejo.org/services/context"
@@ -31,16 +33,35 @@ func damastAPIError(ctx *context.APIContext, err error) {
 	}
 }
 
+// damastAccess is the doer and permission every advisory check uses. A public-only token gets what an anonymous
+// visitor gets: published advisories only, never drafts, reports or discussions (as GitHub's public_repo scope).
+// checkTokenPublicOnly has already turned such tokens away from private repositories.
+func damastAccess(ctx *context.APIContext) (*user_model.User, *access_model.Permission) {
+	if !ctx.PublicOnly() {
+		return ctx.Doer(), ctx.Permission()
+	}
+	if p, ok := ctx.Data["DamastPublicOnlyPerm"].(*access_model.Permission); ok {
+		return nil, p
+	}
+	p, err := access_model.GetUserRepoPermission(ctx, ctx.Repo().Repository, nil)
+	if err != nil {
+		log.Error("GetUserRepoPermission: %v", err)
+		p = access_model.Permission{} // no access: every check answers 404
+	}
+	ctx.Data["DamastPublicOnlyPerm"] = &p
+	return nil, &p
+}
+
 // DamastAdvisoryReqRead lets only users in who may read the repository's code (or admins).
 func DamastAdvisoryReqRead(ctx *context.APIContext) {
-	if !security.CanReadRepo(ctx.Permission()) {
+	if _, p := damastAccess(ctx); !security.CanReadRepo(p) {
 		ctx.NotFound()
 	}
 }
 
 // DamastAdvisoryReqAdmin lets only repository admins in.
 func DamastAdvisoryReqAdmin(ctx *context.APIContext) {
-	if !security.IsAdmin(ctx.Permission()) {
+	if _, p := damastAccess(ctx); !security.IsAdmin(p) {
 		ctx.NotFound()
 	}
 }
@@ -55,7 +76,8 @@ func DamastAdvisoryAssignment(ctx *context.APIContext) {
 		ctx.InternalServerError(err)
 		return
 	}
-	level, err := security.AccessLevel(ctx, ctx.Repo().Repository, a, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	level, err := security.AccessLevel(ctx, ctx.Repo().Repository, a, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -118,7 +140,8 @@ func DamastListAdvisories(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 	repo := ctx.Repo().Repository
-	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	list, err := security.Visible(ctx, repo, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -129,7 +152,7 @@ func DamastListAdvisories(ctx *context.APIContext) {
 		if state != "" && a.State != state {
 			continue
 		}
-		level, err := security.AccessLevel(ctx, repo, a, ctx.Doer(), ctx.Permission())
+		level, err := security.AccessLevel(ctx, repo, a, doer, p)
 		if err != nil {
 			ctx.InternalServerError(err)
 			return
@@ -191,7 +214,8 @@ func DamastCreateAdvisory(ctx *context.APIContext) {
 
 // DamastAdvisoryReqReporter lets only users in who may submit a private vulnerability report.
 func DamastAdvisoryReqReporter(ctx *context.APIContext) {
-	ok, err := security.CanReport(ctx, ctx.Repo().Repository, ctx.Doer(), security.CanReadRepo(ctx.Permission()))
+	doer, p := damastAccess(ctx)
+	ok, err := security.CanReport(ctx, ctx.Repo().Repository, doer, security.CanReadRepo(p))
 	if err != nil {
 		ctx.InternalServerError(err)
 		return
@@ -451,7 +475,8 @@ func DamastListAdvisoriesOSV(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 	repo := ctx.Repo().Repository
-	list, err := security.Visible(ctx, repo, ctx.Doer(), ctx.Permission())
+	doer, p := damastAccess(ctx)
+	list, err := security.Visible(ctx, repo, doer, p)
 	if err != nil {
 		ctx.InternalServerError(err)
 		return

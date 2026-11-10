@@ -57,20 +57,26 @@ func Report(ctx context.Context, repo *repo_model.Repository, doer *user_model.U
 	if err := in.Normalize(); err != nil {
 		return nil, err
 	}
-	open, err := damast.CountReports(ctx, doer.ID, repo.ID, damast.AdvisoryTriage, time.Time{})
-	if err != nil {
-		return nil, err
-	}
-	recent, err := damast.CountReports(ctx, doer.ID, 0, "", time.Now().Add(-24*time.Hour))
-	if err != nil {
-		return nil, err
-	}
-	if open >= MaxOpenReportsPerRepo || recent >= MaxReportsPerDay {
-		return nil, ErrTooManyReports
-	}
 	a := &damast.SecurityAdvisory{RepoID: repo.ID, State: damast.AdvisoryTriage, CreatorID: doer.ID, ReporterID: doer.ID}
 	apply(a, in)
-	if err := damast.CreateAdvisory(ctx, a); err != nil {
+	// count and insert under the reporter's lock, so concurrent requests cannot all pass the caps
+	if err := db.WithTx(ctx, func(ctx context.Context) error {
+		if err := damast.LockReporter(ctx, doer.ID); err != nil {
+			return err
+		}
+		open, err := damast.CountReports(ctx, doer.ID, repo.ID, damast.AdvisoryTriage, time.Time{})
+		if err != nil {
+			return err
+		}
+		recent, err := damast.CountReports(ctx, doer.ID, 0, "", time.Now().Add(-24*time.Hour))
+		if err != nil {
+			return err
+		}
+		if open >= MaxOpenReportsPerRepo || recent >= MaxReportsPerDay {
+			return ErrTooManyReports
+		}
+		return damast.CreateAdvisory(ctx, a)
+	}); err != nil {
 		return nil, err
 	}
 	notifyNewReport(ctx, repo, a, doer)
@@ -83,7 +89,7 @@ func CanReport(ctx context.Context, repo *repo_model.Repository, doer *user_mode
 	if doer == nil || doer.ID <= 0 || !readsRepo || repo.IsArchived || user_model.IsBlocked(ctx, repo.OwnerID, doer.ID) {
 		return false, nil
 	}
-	return damast.PrivateReportingEnabled(ctx, repo.ID)
+	return damast.PrivateReportingEnabled(ctx, repo)
 }
 
 // Update replaces the content of an advisory. Editing a published advisory moves its OSV "modified" time.
@@ -135,8 +141,11 @@ func setState(ctx context.Context, repo *repo_model.Repository, doer *user_model
 		a.WithdrawnUnix = timeutil.TimeStampNow()
 		cols = append(cols, "withdrawn_unix")
 	}
-	if err := damast.UpdateAdvisory(ctx, a, cols...); err != nil {
+	if ok, err := damast.UpdateAdvisoryState(ctx, a, old, cols...); err != nil || !ok {
 		a.State = old
+		if err == nil { // someone else changed the state since a was loaded
+			err = invalid("state", old, state)
+		}
 		return nil, err
 	}
 	return func() { notifyParticipants(ctx, repo, a, doer, stateMessage(old, state), "") }, nil
@@ -306,6 +315,47 @@ func setCollaborators(ctx context.Context, repo *repo_model.Repository, doer *us
 			notifyAddedCollaborator(ctx, repo, a, doer, u)
 		}
 	}, nil
+}
+
+// CreditUser resolves a credited login. A credit is public, so only users with a public profile can be credited.
+// shortcut: no consent; GitHub-style credit acceptance is planned (see .github/README.md roadmap).
+func CreditUser(ctx context.Context, login string) (*user_model.User, error) {
+	u, err := user_model.GetUserByName(ctx, login)
+	if user_model.IsErrUserNotExist(err) {
+		return nil, invalid("credit_user", login)
+	} else if err != nil {
+		return nil, err
+	}
+	if !u.Visibility.IsPublic() {
+		return nil, invalid("credit_private", login)
+	}
+	return u, nil
+}
+
+// CreditedUser is a credit that may be shown.
+type CreditedUser struct {
+	User *user_model.User
+	Type string
+}
+
+// PublicCredits returns the credits of an advisory whose users still exist and still have a public profile.
+// Every view (web, API, OSV, edit forms) uses it, so a user who later hides their profile disappears everywhere.
+func PublicCredits(ctx context.Context, a *damast.SecurityAdvisory) ([]CreditedUser, error) {
+	ids := make([]int64, 0, len(a.Credits))
+	for _, c := range a.Credits {
+		ids = append(ids, c.UserID)
+	}
+	users, err := LoadUsers(ctx, ids...)
+	if err != nil {
+		return nil, err
+	}
+	credits := make([]CreditedUser, 0, len(a.Credits))
+	for _, c := range a.Credits {
+		if u := users[c.UserID]; !u.IsGhost() && u.Visibility.IsPublic() {
+			credits = append(credits, CreditedUser{User: u, Type: c.Type})
+		}
+	}
+	return credits, nil
 }
 
 // LoadUsers returns the users with the given ids; deleted users become the ghost user.
