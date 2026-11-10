@@ -48,6 +48,12 @@ Each change starts with something that worked on GitHub and didn't on Forgejo.
 - Someone who can't read a package gets a `404`, not a `403`, so names of packages in private repositories don't leak.
 - One switch per package turns this off. Packages that existed before you switched keep Forgejo's rules.
 
+### A file tree next to the code
+
+**On Forgejo:** the code view shows one folder at a time. To open a file three folders down, you click through three pages, and to look at its neighbour you click back up again. The only file tree is the one in pull request diffs.
+
+**On Damast:** a file tree sits on the left of every folder and file page, on any branch, tag or commit, like on GitHub. On the repository's start page it stays hidden until you open it, and blame pages keep their full width. It opens at the file you are looking at, loads folders as you expand them, and swaps only the content when you click a file, so the tree stays where it was. The back button, line links like `#L10` and the branch menu keep working. It works with the keyboard and remembers whether you hid it. On phones it stays out of the way until you open it.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -93,6 +99,7 @@ What you lose:
 | Feature | After going back |
 |---|---|
 | Co-authors | The trailers stay in your commits (that's git). Forgejo shows them as text again. |
+| File tree | Gone. The code view goes back to one folder per page. Nothing was stored. |
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 
 Nothing from Forgejo is lost, because Damast never changes Forgejo's tables or its migration chain. CI rejects any pull request that tries.
@@ -117,6 +124,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 **Shipped**
 - Co-authors on commit pages, commit lists, the commit graph, pull requests and in `mast`
 - Repo-bound packages: publish, download, Actions token, per-package switch
+- File tree next to the code: folders load as you open them, clicks swap only the content
 - Damast's own name and logo
 - Releases with release candidates, binaries for amd64 and arm64, Docker images
 

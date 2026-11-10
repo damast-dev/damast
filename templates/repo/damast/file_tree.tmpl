@@ -1,0 +1,29 @@
+{{/* DAMAST: file tree sidebar of the code view (MAST-17), mounted by web_src/js/features/damast-file-tree.js. Strings: options/locale_damast. */}}
+{{if and .BranchNameSubURL (not .IsBlame)}}
+<nav id="damast-file-tree" class="damast-file-tree" aria-label="{{ctx.Locale.Tr "damast.file_tree.label"}}"
+	data-repo-link="{{.RepoLink}}"
+	data-ref-sub-url="{{.BranchNameSubURL}}"
+	data-tree-path="{{.TreePath}}"
+	data-text-files="{{ctx.Locale.Tr "damast.file_tree.files"}}"
+	data-text-loading-tree="{{ctx.Locale.Tr "damast.file_tree.loading"}}"
+	data-text-load-error="{{ctx.Locale.Tr "damast.file_tree.load_error"}}"
+	data-text-loading="{{ctx.Locale.Tr "loading"}}"
+	data-text-expand="{{ctx.Locale.Tr "damast.file_tree.expand"}}"
+	data-text-collapse="{{ctx.Locale.Tr "damast.file_tree.collapse"}}"
+	data-text-more="{{ctx.Locale.Tr "damast.file_tree.more"}}"
+	data-text-show="{{ctx.Locale.Tr "damast.file_tree.show"}}"
+	data-text-hide="{{ctx.Locale.Tr "damast.file_tree.hide"}}">
+	<div class="damast-file-tree-loading">{{ctx.Locale.Tr "damast.file_tree.loading"}}</div>
+</nav>
+<div id="damast-file-tree-status" class="tw-sr-only" role="status"></div>{{/* announces the page title after a content swap */}}
+<script>
+	// decide visibility before the content is painted, so the layout does not jump once the tree is mounted
+	(() => {
+		const el = document.getElementById('damast-file-tree');
+		let pref = null;
+		try { pref = localStorage.getItem('damast-file-tree'); } catch {}
+		const show = window.matchMedia('(min-width: 768px)').matches && (pref ? pref === 'shown' : el.getAttribute('data-tree-path') !== '');
+		el.classList.toggle('is-visible', show);
+	})();
+</script>
+{{end}}
