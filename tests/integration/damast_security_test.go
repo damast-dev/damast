@@ -251,7 +251,7 @@ func prepareSecurityEnv(t *testing.T) *secEnv {
 			e.users[role] = forgery.CreateUser(t, nil)
 		}
 	}
-	org := forgery.CreateOrganisation(t, e.users["org_owner"])
+	org := forgery.CreateOrganisation(t, e.users["org_owner"], nil)
 	forgery.CreateTeam(t, org, &forgery.CreateTeamOptions{Mode: perm.AccessModeAdmin, Members: []*user_model.User{e.users["admin_team"]}})
 	admin := e.users["admin_team"]
 	for _, private := range []bool{true, false} {
