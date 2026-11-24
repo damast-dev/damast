@@ -455,7 +455,10 @@ func DismissApprovalReviews(ctx context.Context, doer *user_model.User, pull *is
 		return err
 	}
 
-	return db.WithTx(ctx, func(ctx context.Context) error {
+	// DAMAST: notify after the commit. The immediate test queue runs handlers inline and their own
+	// transaction would wait for this one (sqlite busy_timeout) until the test gives up.
+	var dismissed []*issues_model.Comment
+	err = db.WithTx(ctx, func(ctx context.Context) error {
 		for _, review := range reviews {
 			if err := issues_model.DismissReview(ctx, review, true); err != nil {
 				return err
@@ -477,10 +480,17 @@ func DismissApprovalReviews(ctx context.Context, doer *user_model.User, pull *is
 			comment.Poster = doer
 			comment.Issue = review.Issue
 
-			notify_service.PullReviewDismiss(ctx, doer, review, comment)
+			dismissed = append(dismissed, comment)
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	for _, comment := range dismissed {
+		notify_service.PullReviewDismiss(ctx, doer, comment.Review, comment)
+	}
+	return nil
 }
 
 // DismissReview dismissing stale review by repo admin
