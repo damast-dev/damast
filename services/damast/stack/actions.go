@@ -324,6 +324,14 @@ type notifier struct {
 	notify_service.NullNotifier
 }
 
+func (*notifier) DeleteIssue(ctx context.Context, _ *user_model.User, issue *issues_model.Issue) {
+	if issue.IsPull && issue.PullRequest != nil {
+		if err := damast_model.DeleteStackBase(ctx, issue.PullRequest.ID); err != nil {
+			log.Error("delete stack base of %v: %v", issue, err)
+		}
+	}
+}
+
 func (*notifier) MergePullRequest(ctx context.Context, _ *user_model.User, pr *issues_model.PullRequest) {
 	recordChildBases(ctx, pr)
 }

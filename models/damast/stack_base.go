@@ -8,6 +8,8 @@ import (
 
 	"forgejo.org/models/db"
 	"forgejo.org/modules/timeutil"
+
+	"xorm.io/builder"
 )
 
 // StackBase remembers the head commit of the parent a stacked pull request was last based on.
@@ -48,5 +50,19 @@ func SetStackBase(ctx context.Context, pullRequestID int64, parentHead string) e
 		return err
 	}
 	_, err = e.Insert(&StackBase{PullRequestID: pullRequestID, ParentHead: parentHead})
+	return err
+}
+
+// DeleteStackBase removes the record of one pull request.
+func DeleteStackBase(ctx context.Context, pullRequestID int64) error {
+	_, err := db.GetEngine(ctx).ID(pullRequestID).Delete(&StackBase{})
+	return err
+}
+
+// DeleteRepoStackBases removes the records of all pull requests of a repository.
+// Owners are covered because deleting an owner deletes its repositories one by one.
+func DeleteRepoStackBases(ctx context.Context, repoID int64) error {
+	ids := builder.Select("id").From("pull_request").Where(builder.Eq{"base_repo_id": repoID})
+	_, err := db.GetEngine(ctx).Where(builder.In("pull_request_id", ids)).Delete(&StackBase{})
 	return err
 }

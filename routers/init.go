@@ -36,8 +36,8 @@ import (
 	auth_method "forgejo.org/services/auth/method"
 	"forgejo.org/services/auth/source/oauth2"
 	"forgejo.org/services/automerge"
-	damast_stack "forgejo.org/services/damast/stack" // DAMAST:
 	"forgejo.org/services/cron"
+	damast_stack "forgejo.org/services/damast/stack" // DAMAST:
 	federation_service "forgejo.org/services/federation"
 	feed_service "forgejo.org/services/feed"
 	indexer_service "forgejo.org/services/indexer"

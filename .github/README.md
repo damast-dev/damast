@@ -165,7 +165,7 @@ What you lose:
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 | Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
 | Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
-| Stacked pull requests | The pull requests and their base branches stay. The stack map and the stack buttons are gone, and a merged layer's children are retargeted when you delete its branch, as before. The only data is the `damast_stack_base` table (parent commits for `--onto` rebases), which Forgejo ignores. |
+| Stacked pull requests | The pull requests and their base branches stay. The stack map and the stack buttons are gone, and a merged layer's children are retargeted when you delete its branch, as before. The only data is the `damast_stack_base` table (parent commits for `--onto` rebases; removed with their pull request or repository), which Forgejo ignores. |
 
 Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
 

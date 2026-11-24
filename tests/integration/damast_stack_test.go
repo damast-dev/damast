@@ -13,6 +13,7 @@ import (
 	"time"
 
 	auth_model "forgejo.org/models/auth"
+	damast_model "forgejo.org/models/damast"
 	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
@@ -23,6 +24,7 @@ import (
 	"forgejo.org/modules/gitrepo"
 	api "forgejo.org/modules/structs"
 	app_context "forgejo.org/services/context"
+	issue_service "forgejo.org/services/issue"
 	pull_service "forgejo.org/services/pull"
 	repo_service "forgejo.org/services/repository"
 	"forgejo.org/services/repository/commitstatus"
@@ -350,6 +352,37 @@ func TestDamastStack(t *testing.T) {
 			c := e.layer("c", "main", "Layer C")
 			e.commit("main", "main", "main.txt", "moved")
 			e.action(c, "rebase", e.token, http.StatusForbidden, nil)
+		})
+
+		t.Run("stack base records are cleaned up", func(t *testing.T) {
+			setup := func() (*damastStackEnv, *issues_model.PullRequest) {
+				e := newDamastStackEnv(t, false, nil)
+				a := e.layer("a", "main", "Layer A")
+				b := e.layer("b", "a", "Layer B")
+				session := loginUser(t, e.owner.Name)
+				testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(a.Index), repo_model.MergeStyleMerge, false)
+				head, err := damast_model.GetStackBase(t.Context(), b.ID)
+				require.NoError(t, err)
+				require.NotEmpty(t, head, "recorded when the parent was merged")
+				return e, b
+			}
+			// the pull request is deleted
+			e, b := setup()
+			gitRepo, err := gitrepo.OpenRepository(t.Context(), e.repo)
+			require.NoError(t, err)
+			defer gitRepo.Close()
+			issue := unittest.AssertExistsAndLoadBean(t, &issues_model.Issue{ID: b.IssueID})
+			require.NoError(t, issue_service.DeleteIssue(t.Context(), e.owner, gitRepo, issue))
+			head, err := damast_model.GetStackBase(t.Context(), b.ID)
+			require.NoError(t, err)
+			assert.Empty(t, head)
+
+			// the repository (and so its owner's repositories) is deleted
+			e, b = setup()
+			require.NoError(t, repo_service.DeleteRepositoryDirectly(t.Context(), e.repo.ID, repo_service.DeleteRepositoryOpts{}))
+			head, err = damast_model.GetStackBase(t.Context(), b.ID)
+			require.NoError(t, err)
+			assert.Empty(t, head)
 		})
 
 		t.Run("rebase stack", func(t *testing.T) {
