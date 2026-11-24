@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"forgejo.org/models"
+	"forgejo.org/models/damast" // DAMAST:
 	"forgejo.org/models/db"
 	org_model "forgejo.org/models/organization"
 	packages_model "forgejo.org/models/packages"
@@ -50,6 +51,9 @@ func DeleteOrganization(ctx context.Context, org *org_model.Organization, purge 
 
 	if err := org_model.DeleteOrganization(ctx, org); err != nil {
 		return fmt.Errorf("DeleteOrganization: %w", err)
+	}
+	if err := damast.DeleteOwnerPackageData(ctx, org.ID); err != nil { // DAMAST: repo-bound packages
+		return err
 	}
 
 	if err := committer.Commit(); err != nil {

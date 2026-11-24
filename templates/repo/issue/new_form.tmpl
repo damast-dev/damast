@@ -31,6 +31,7 @@
 					{{else}}
 						{{template "repo/issue/comment_tab" .}}
 					{{end}}
+					{{if .PageIsComparePull}}{{template "repo/damast/pull_create_buttons" .}}{{else}}{{/* DAMAST: draft split button */}}
 					<div class="text right">
 						<button class="ui primary button">
 							{{if .PageIsComparePull}}
@@ -40,6 +41,7 @@
 							{{end}}
 						</button>
 					</div>
+					{{end}}{{/* DAMAST */}}
 				</div>
 			</div>
 		</div>

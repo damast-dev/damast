@@ -16,13 +16,27 @@ import (
 // Write routes that are not uploads; provisional access never applies to them.
 var damastNonUploadPaths = []string{"/unyank", "/yank", "/-rev/", "/dist-tags/", "/delete"}
 
-// Registries whose read endpoints all work per package (descriptor or file stream), so CheckRead covers
-// them. Registries with owner-wide indexes (debian, rpm, alpine, arch, alt, cargo, composer, helm,
-// rubygems, ...) would leak other packages and keep owner-level read.
-var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true}
+// Registries whose read endpoints all work per package (descriptor, file stream, or per-package lookups
+// that hide what the reader can't see), so CheckRead covers them. Registries with owner-wide indexes
+// (debian, rpm, alpine, arch, alt, cargo, composer, helm, rubygems, ...) would leak other packages and keep
+// owner-level read.
+var damastReadTypes = map[string]bool{"generic": true, "npm": true, "maven": true, "pypi": true, "conan": true}
 
-// Read routes that list several packages or bypass descriptors; provisional read never applies to them.
-var damastListPaths = []string{"/_catalog", "/tags/list", "/-/v1/search", "/dist-tags"}
+// Read routes that list several packages; provisional read never applies to them. Per-package lists
+// (npm dist-tags, container tags/list) are fine: hidden packages look missing there (GetPackageByName,
+// GetVersionsByPackageName).
+var damastListPaths = []string{"/_catalog", "/-/v1/search", "/conans/search"}
+
+// damastUploadGet reports GET steps of multi-step uploads (pub: ask for an upload URL, finalize). They get
+// provisional write like the upload itself; finalize checks the package like any write to an existing one.
+// Matched exactly, so no read route (pub package "versions", maven paths) ever gets write.
+func damastUploadGet(path string) bool {
+	parts := strings.SplitN(strings.TrimPrefix(path, "/api/packages/"), "/", 3)
+	if !strings.HasPrefix(path, "/api/packages/") || len(parts) < 3 || parts[1] != "pub" {
+		return false
+	}
+	return parts[2] == "api/packages/versions/new" || strings.HasPrefix(parts[2], "api/packages/versions/new/finalize/")
+}
 
 // damastProvisionalAccess grants provisional access when owner-level access is not enough but the doer
 // has access to a repository of the owner: write for uploads, read for downloads/metadata of the
@@ -33,7 +47,8 @@ func damastProvisionalAccess(ctx *context.Context) {
 		return
 	}
 	mode := damastRequestMode(ctx.Req)
-	if mode == perm.AccessModeNone || ctx.Package.AccessMode >= mode {
+	// site admins pass reqPackageAccess anyway; a Grant would only narrow them to their repositories
+	if mode == perm.AccessModeNone || ctx.Package.AccessMode >= mode || ctx.IsUserSiteAdmin() {
 		return
 	}
 	_, taskID := ctx.Authentication.ActionsTaskID().Get()
@@ -43,6 +58,7 @@ func damastProvisionalAccess(ctx *context.Context) {
 		return
 	}
 	if g != nil {
+		g.Reducer = ctx.Authentication.Reducer() // public-only tokens must not reach private repositories
 		ctx.Package.AccessMode = mode
 		ctx.Base.AppendContextValue(damast_packages.GrantKey, g)
 		ctx.Resp = &damastDenyResponse{ResponseWriter: ctx.Resp, grant: g}
@@ -80,6 +96,9 @@ func damastRequestMode(req *http.Request) perm.AccessMode {
 		}
 		return perm.AccessModeWrite
 	case http.MethodGet, http.MethodHead:
+		if damastUploadGet(path) {
+			return perm.AccessModeWrite
+		}
 		for _, p := range damastListPaths {
 			if strings.Contains(path, p) {
 				return perm.AccessModeNone

@@ -837,6 +837,7 @@ func registerRoutes(m *web.Route) {
 				m.Post("/rebuild", user_setting.RebuildCargoIndex)
 			})
 			m.Post("/chef/regenerate_keypair", user_setting.RegenerateChefKeyPair)
+			m.Post("/damast", user_setting.DamastPackagesPost) // DAMAST: owner package settings
 		}, packagesEnabled)
 
 		m.Group("/actions", func() {
@@ -1180,6 +1181,7 @@ func registerRoutes(m *web.Route) {
 						m.Post("/initialize", org.InitializeCargoIndex)
 						m.Post("/rebuild", org.RebuildCargoIndex)
 					})
+					m.Post("/damast", org.DamastPackagesPost) // DAMAST: owner package settings
 				}, packagesEnabled)
 			}, ctxDataSet("EnableOAuth2", setting.OAuth2.Enabled, "EnablePackages", setting.Packages.Enabled, "EnableQuota", setting.Quota.Enabled, "PageIsOrgSettings", true))
 		}, context.OrgAssignment(true, true))
@@ -1371,7 +1373,8 @@ func registerRoutes(m *web.Route) {
 			m.Get("/branch/*", context.RepoRefByType(context.RepoRefBranch), repo.TreeList)
 			m.Get("/tag/*", context.RepoRefByType(context.RepoRefTag), repo.TreeList)
 			m.Get("/commit/*", context.RepoRefByType(context.RepoRefCommit), repo.TreeList)
-		})
+		}, reqRepoCodeReader) // DAMAST: upstream lists files to people without code access
+		m.Group("/tree-view", repo.DamastTreeViewRoutes(m), repo.MustBeNotEmpty, reqRepoCodeReader) // DAMAST: code view file tree
 		m.Get("/compare", repo.MustBeNotEmpty, reqRepoCodeReader, repo.SetEditorconfigIfExists, ignSignIn, repo.SetDiffViewStyle, repo.SetWhitespaceBehavior, repo.CompareDiff)
 		m.Combo("/compare/*", repo.MustBeNotEmpty, reqRepoCodeReader, repo.SetEditorconfigIfExists).
 			Get(repo.SetDiffViewStyle, repo.SetWhitespaceBehavior, repo.CompareDiff).
@@ -1395,6 +1398,7 @@ func registerRoutes(m *web.Route) {
 
 	// Grouping for those endpoints that do require authentication
 	m.Group("/{username}/{reponame}", func() {
+		m.Post("/pulls/{index}/damast/suggestions/apply", context.RepoMustNotBeArchived(), repo.DamastApplySuggestions) // DAMAST: review suggestions
 		if !setting.Repository.DisableForks {
 			m.Combo("/fork", reqRepoCodeReader).Get(repo.Fork).
 				Post(web.Bind(forms.CreateRepoForm{}), repo.ForkPost)
@@ -1836,6 +1840,8 @@ func registerRoutes(m *web.Route) {
 	}, ignSignIn, context.RepoAssignment, context.UnitTypes())
 
 	m.Get("/{username}/{reponame}/lastcommit/*", ignSignIn, context.RepoAssignment, context.UnitTypes(), context.RepoRefByType(context.RepoRefCommit), reqRepoCodeReader, repo.LastCommit)
+
+	registerDamastSecurityRoutes(m) // DAMAST: security advisories
 
 	m.Group("/{username}/{reponame}", func() {
 		if !setting.Repository.DisableStars {

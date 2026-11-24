@@ -19,9 +19,9 @@ test.describe('Pull: Toggle WIP', () => {
   async function toggle_wip_to({page}: {page: Page}, should: boolean) {
     const loadPromise = page.waitForEvent('load');
     if (should) {
-      await page.getByText('Still in progress?').click();
+      await page.locator('[data-test-name="damast-convert-to-draft"]').click(); // DAMAST: was getByText('Still in progress?')
     } else {
-      await page.getByText('Ready for review?').click();
+      await page.locator('[data-test-name="damast-sidebar-ready"]').click(); // DAMAST: was getByText('Ready for review?')
     }
     await loadPromise;
   }
@@ -33,7 +33,8 @@ test.describe('Pull: Toggle WIP', () => {
     await expect(page.locator(elemTitle)).toContainText('#5');
     const wipRegex = /(wip|\[WIP\])/i;
     if (is) {
-      await expect(page.locator(elemTitle)).toContainText(wipRegex);
+      await expect(page.locator('#issue-title-editor input')).toHaveValue(wipRegex); // DAMAST: h1 hides the prefix
+      await expect(page.locator(elemTitle)).not.toContainText(wipRegex); // DAMAST
       await expect(page.locator(stateLabel)).toContainText('Draft');
     } else {
       await expect(page.locator(elemTitle)).not.toContainText(wipRegex);
@@ -91,12 +92,12 @@ test.describe('Pull: Toggle WIP', () => {
 
   test('wip prefix casing', async ({page}) => {
     await setTitle({page}, `wIP:${prTitle}`);
-    await expect(page.locator('h1')).toContainText(`wIP:${prTitle}`);
+    await expect(page.locator('#issue-title-editor input')).toHaveValue(`wIP:${prTitle}`); // DAMAST: h1 hides the prefix
     await check_wip({page}, true);
     await toggle_wip_to({page}, false);
     await check_wip({page}, false);
     await setTitle({page}, `[Wip]:${prTitle}`);
-    await expect(page.locator('h1')).toContainText(`[Wip]:${prTitle}`);
+    await expect(page.locator('#issue-title-editor input')).toHaveValue(`[Wip]:${prTitle}`); // DAMAST: h1 hides the prefix
     await check_wip({page}, true);
     await toggle_wip_to({page}, false);
     await check_wip({page}, false);

@@ -1,0 +1,24 @@
+{{/* DAMAST: owner package settings. Strings: options/locale_damast. */}}
+<h4 class="ui top attached header">{{ctx.Locale.Tr "damast.packages.new_packages"}}</h4>
+<div class="ui attached segment">
+	<form class="ui form" action="{{.Link}}/damast" method="post">
+		<div class="grouped fields">
+			<div class="field">
+				<div class="ui radio checkbox">
+					<input id="damast-new-packages-owners" name="new_packages" type="radio" value="owners" {{if not .DamastRepoWritersCreate}}checked{{end}}>
+					<label for="damast-new-packages-owners">{{ctx.Locale.Tr "damast.packages.new_packages_owners"}}</label>
+				</div>
+			</div>
+			<div class="field">
+				<div class="ui radio checkbox">
+					<input id="damast-new-packages-repo-writers" name="new_packages" type="radio" value="repo_writers" {{if .DamastRepoWritersCreate}}checked{{end}}>
+					<label for="damast-new-packages-repo-writers">{{ctx.Locale.Tr "damast.packages.new_packages_repo_writers"}}</label>
+				</div>
+			</div>
+			<p class="help">{{ctx.Locale.Tr "damast.packages.new_packages_help"}}</p>
+		</div>
+		<div class="field">
+			<button class="ui primary button">{{ctx.Locale.Tr "save"}}</button>
+		</div>
+	</form>
+</div>

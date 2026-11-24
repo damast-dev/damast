@@ -255,6 +255,9 @@ func GetPackageFileDescriptors(ctx context.Context, pfs []*PackageFile) ([]*Pack
 	pfds := make([]*PackageFileDescriptor, 0, len(pfs))
 	for _, pf := range pfs {
 		pfd, err := GetPackageFileDescriptor(ctx, pf)
+		if errors.Is(err, ErrPackageNotExist) { // DAMAST: hidden packages look missing
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
