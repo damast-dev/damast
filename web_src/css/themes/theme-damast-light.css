@@ -1,0 +1,30 @@
+/* Damast light: Forgejo light with a green accent instead of orange (GitHub's Primer greens).
+   Only the primary colours change; everything else comes from Forgejo. #1a7f37 instead of GitHub's
+   button green #1f883d as primary, because it is also the link colour and #1f883d misses WCAG AA
+   (4.5:1) on Forgejo's light grey menus and headers. */
+@import "./theme-forgejo-light.css";
+
+:root {
+  --color-primary: #1a7f37;
+  --color-primary-contrast: #ffffff;
+  --color-primary-dark-1: #1a7f37;
+  --color-primary-dark-2: #116329;
+  --color-primary-dark-3: #116329;
+  --color-primary-dark-4: #044f1e;
+  --color-primary-light-1: #1f883d;
+  --color-primary-light-2: #2da44e;
+  --color-primary-light-3: #4ac26b;
+  --color-primary-light-4: #6fdd8b;
+  --color-primary-light-5: #aceebb;
+  --color-primary-light-6: #dafbe1;
+  --color-primary-light-7: #f0fdf3;
+  --color-primary-alpha-10: #1a7f3719;
+  --color-primary-alpha-20: #1a7f3733;
+  --color-primary-alpha-30: #1a7f374b;
+  --color-primary-alpha-40: #1a7f3766;
+  --color-primary-alpha-50: #1a7f3780;
+  --color-primary-alpha-60: #1a7f3799;
+  --color-primary-alpha-70: #1a7f37b3;
+  --color-primary-alpha-80: #1a7f37cc;
+  --color-primary-alpha-90: #1a7f37e1;
+}

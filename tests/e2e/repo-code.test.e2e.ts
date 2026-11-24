@@ -110,7 +110,7 @@ test.describe('As authenticated user', () => {
 
 test('Unicode escape highlight', async ({page}) => {
   const unselectedBg = 'rgba(0, 0, 0, 0)';
-  const selectedBg = 'rgb(255, 237, 213)';
+  const selectedBg = 'rgb(218, 251, 225)'; // DAMAST: damast-light --color-primary-light-6
 
   const response = await page.goto('/user2/unicode-escaping/src/branch/main/a-file');
   expect(response?.status()).toBe(200);
