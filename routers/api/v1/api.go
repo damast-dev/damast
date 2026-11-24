@@ -1054,6 +1054,9 @@ func Routes() *web.Route {
 								m.Post("/undismissals", reqToken(), repo.UnDismissPullReview)
 							})
 						})
+						// DAMAST: review suggestions
+						m.Get("/damast/suggestions", repo.DamastListSuggestions)
+						m.Post("/damast/suggestions/apply", reqToken(), mustNotBeArchived(), bind(repo.DamastApplySuggestionsOption{}), repo.DamastApplySuggestions)
 						m.Combo("/requested_reviewers", reqToken()).
 							Delete(bind(api.PullReviewRequestOptions{}), repo.DeleteReviewRequests).
 							Post(bind(api.PullReviewRequestOptions{}), repo.CreateReviewRequests)

@@ -43,6 +43,7 @@ Template Attributes:
 			<md-mention class="markdown-toolbar-button" data-tooltip-content="{{ctx.Locale.Tr "mde.buttons.mention.tooltip"}}">{{svg "octicon-mention"}}</md-mention>
 			<md-ref class="markdown-toolbar-button" data-tooltip-content="{{ctx.Locale.Tr "mde.buttons.ref.tooltip"}}">{{svg "octicon-cross-reference"}}</md-ref>
 		</div>
+		{{if .DamastSuggest}}{{template "repo/damast/suggest_button"}}{{end}}{{/* DAMAST: */}}
 		<div class="markdown-toolbar-group">
 			<button type="button" class="markdown-toolbar-button markdown-switch-monospace" data-md-button role="switch" data-enable-text="{{ctx.Locale.Tr "editor.buttons.enable_monospace_font"}}" data-disable-text="{{ctx.Locale.Tr "editor.buttons.disable_monospace_font"}}">{{svg "octicon-typography"}}</button>
 			{{if .EasyMDE}}
