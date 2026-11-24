@@ -22,6 +22,7 @@ import (
 	"forgejo.org/modules/setting"
 	"forgejo.org/routers/api/packages/helper"
 	"forgejo.org/services/context"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	notify_service "forgejo.org/services/notify"
 	packages_service "forgejo.org/services/packages"
 )
@@ -381,6 +382,10 @@ func uploadFile(ctx *context.Context, fileFilter container.Set[string], fileKey 
 				return
 			}
 			if pv != nil {
+				if err := damast_packages.OnWriteVersion(ctx, pv, ctx.Doer); err != nil { // DAMAST: repo-bound packages
+					apiError(ctx, http.StatusForbidden, err)
+					return
+				}
 				raw, err := json.Marshal(metadata)
 				if err != nil {
 					apiError(ctx, http.StatusInternalServerError, err)

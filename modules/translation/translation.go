@@ -125,6 +125,7 @@ func InitLocales(ctx context.Context) {
 			} else {
 				log.Error("Failed to open new-style messages for %s: %v", setting.Langs[i], err)
 			}
+			damastAddLocale(setting.Langs[i]) // DAMAST: own message files in options/locale_damast
 		}
 		if len(setting.Langs) != 0 {
 			defaultLangName := setting.Langs[0]

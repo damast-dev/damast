@@ -106,6 +106,11 @@ func GetPackageDescriptor(ctx context.Context, pv *PackageVersion) (*PackageDesc
 	if err != nil {
 		return nil, err
 	}
+	if DamastCheckRead != nil { // DAMAST: repo-bound packages
+		if err := DamastCheckRead(ctx, p); err != nil {
+			return nil, err
+		}
+	}
 	o, err := user_model.GetUserByID(ctx, p.OwnerID)
 	if err != nil {
 		return nil, err
@@ -225,6 +230,11 @@ func GetPackageDescriptor(ctx context.Context, pv *PackageVersion) (*PackageDesc
 
 // GetPackageFileDescriptor gets a package file descriptor for a package file
 func GetPackageFileDescriptor(ctx context.Context, pf *PackageFile) (*PackageFileDescriptor, error) {
+	if DamastCheckReadFile != nil { // DAMAST: repo-bound packages
+		if err := DamastCheckReadFile(ctx, pf); err != nil {
+			return nil, err
+		}
+	}
 	pb, err := GetBlobByID(ctx, pf.BlobID)
 	if err != nil {
 		return nil, err
@@ -245,6 +255,9 @@ func GetPackageFileDescriptors(ctx context.Context, pfs []*PackageFile) ([]*Pack
 	pfds := make([]*PackageFileDescriptor, 0, len(pfs))
 	for _, pf := range pfs {
 		pfd, err := GetPackageFileDescriptor(ctx, pf)
+		if errors.Is(err, ErrPackageNotExist) { // DAMAST: hidden packages look missing
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}

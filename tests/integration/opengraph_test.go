@@ -31,7 +31,7 @@ func TestOpenGraphProperties(t *testing.T) {
 			expected: map[string]string{
 				"og:title":       siteName,
 				"og:url":         setting.AppURL,
-				"og:description": "Forgejo is a self-hosted lightweight software forge. Easy to install and low maintenance, it just does the job.",
+				"og:description": "Damast is a self-hosted software forge based on Forgejo. Easy to install and low maintenance, it just does the job.", // DAMAST: branding
 				"og:type":        "website",
 				"og:image":       "/assets/img/logo.png",
 				"og:site_name":   siteName,

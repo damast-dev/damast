@@ -1,0 +1,1 @@
+# Reachable govulncheck findings we handle ourselves. One ID per line, then why. Remove an entry once a fixed version exists.

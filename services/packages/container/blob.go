@@ -19,6 +19,7 @@ import (
 	packages_module "forgejo.org/modules/packages"
 	container_module "forgejo.org/modules/packages/container"
 	"forgejo.org/modules/util"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	packages_service "forgejo.org/services/packages"
 
 	oci_digest "github.com/opencontainers/go-digest"
@@ -151,6 +152,10 @@ func GetOrCreateUploadVersion(ctx context.Context, pi *packages_service.PackageI
 				log.Error("Error setting package property %s: %v", container_module.PropertyRepositoryAutolinkingPending, err)
 				return err
 			}
+		}
+
+		if err := damast_packages.OnWrite(ctx, p, created, nil, nil); err != nil { // DAMAST: repo-bound packages
+			return err
 		}
 
 		pv := &packages_model.PackageVersion{

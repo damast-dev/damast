@@ -17,6 +17,7 @@
 
 	<div class="commit">
 		<div class="author">
+			{{$damastCo := DamastCoAuthors ctx .Commit}}{{if $damastCo}}{{$damastName := .Author.Name}}{{if and .User .User.FullName DefaultShowFullName}}{{$damastName = .User.FullName}}{{end}}{{template "repo/damast/authors" (dict "Co" $damastCo "User" .User "Name" $damastName "Email" .Author.Email "Size" 28 "Mode" "list")}}{{else}}{{/* DAMAST: co-author stack */}}
 			{{$userName := .Author.Name}}
 			{{if .User}}
 				{{if and .User.FullName DefaultShowFullName}}
@@ -27,6 +28,7 @@
 				{{ctx.AvatarUtils.AvatarByEmail .Author.Email .Author.Name 28}}
 				<span class="author-name">{{$userName}}</span>
 			{{end}}
+			{{end}}{{/* DAMAST: */}}
 		</div>
 
 		<div class="message">

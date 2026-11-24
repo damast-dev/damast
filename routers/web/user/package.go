@@ -415,6 +415,7 @@ func PackageSettings(ctx *context.Context) {
 	})
 	ctx.Data["Repos"] = repos
 	ctx.Data["CanWritePackages"] = ctx.Package.AccessMode >= perm.AccessModeWrite || ctx.IsUserSiteAdmin()
+	damastPackageSettingsData(ctx) // DAMAST: repo-bound packages
 
 	err := shared_user.LoadHeaderCount(ctx)
 	if err != nil {
@@ -463,6 +464,9 @@ func PackageSettingsPost(ctx *context.Context) {
 		}
 
 		ctx.Redirect(ctx.Link)
+		return
+	case "damast_inherit": // DAMAST: repo-bound packages
+		damastPackageInheritPost(ctx)
 		return
 	case "delete":
 		err := packages_service.RemovePackageVersion(ctx, ctx.Doer, ctx.Package.Descriptor.Version)

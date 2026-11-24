@@ -1,0 +1,19 @@
+# Categories for GitHub's generated release notes, by PR label.
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: Features
+      labels: [feature]
+    - title: Fixes
+      labels: [fix]
+    - title: Security
+      labels: [security]
+    - title: Branding
+      labels: [branding]
+    - title: Upstream (Forgejo releases)
+      labels: [upstream-sync]
+    - title: CI and releases
+      labels: [ci]
+    - title: Other changes
+      labels: ["*"]
