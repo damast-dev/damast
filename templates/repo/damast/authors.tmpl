@@ -1,0 +1,25 @@
+{{/* DAMAST: author + co-authors as a GitHub-style avatar stack, followed by the names.
+Args: Co ([]DamastCoAuthor, non-empty), User (*user.User or nil), Name, Email (commit author), Size (int),
+Mode ("header": all names linked | "list": "A and B" / "A and N others" | "small": avatars only).
+Strings: options/locale_damast. */}}
+{{$size := .Size}}{{$mode := .Mode}}{{$co := .Co}}{{$n := len $co}}{{$and := ctx.Locale.Tr "damast.coauthors.and"}}
+<span class="damast-authors damast-authors-{{$mode}} tw-inline-flex tw-items-center">
+	<span class="damast-avatar-stack damast-avatar-stack-{{$size}} tw-inline-flex tw-items-center tw-mr-2">
+		{{if .User}}<a class="damast-author" href="{{.User.HomeLink}}" data-tooltip-content="{{.User.GetDisplayName}}">{{ctx.AvatarUtils.Avatar .User $size}}</a>
+		{{else}}<span class="damast-author" data-tooltip-content="{{.Name}}">{{ctx.AvatarUtils.AvatarByEmail .Email .Name $size}}</span>{{end}}
+		{{range $i, $c := $co}}{{if lt $i 4}}
+			{{if $c.User}}<a class="damast-coauthor" href="{{$c.User.HomeLink}}" data-tooltip-content="{{$c.Name}}">{{ctx.AvatarUtils.Avatar $c.User $size}}</a>
+			{{else}}<span class="damast-coauthor" data-tooltip-content="{{$c.Name}} &lt;{{$c.Email}}&gt;">{{ctx.AvatarUtils.AvatarByEmail $c.Email $c.Name $size}}</span>{{end}}
+		{{end}}{{end}}
+		{{if gt $n 4}}<span class="damast-coauthor-more text small" data-tooltip-content="{{range $i, $c := $co}}{{if gt $i 4}}, {{end}}{{if ge $i 4}}{{$c.Name}}{{end}}{{end}}">+{{Eval $n "-" 4}}</span>{{end}}
+	</span>
+	{{if ne $mode "small"}}
+	<span class="damast-author-names">
+		{{if .User}}<a class="muted" href="{{.User.HomeLink}}"><strong>{{.Name}}</strong></a>{{else}}<strong>{{.Name}}</strong>{{end}}
+		{{- if or (eq $mode "header") (eq $n 1)}}
+			{{- range $i, $c := $co}}{{if eq (Eval $i "+" 1) $n}} {{$and}} {{else}}, {{end}}{{if $c.User}}<a class="muted" href="{{$c.User.HomeLink}}"><strong>{{$c.Name}}</strong></a>{{else}}<strong>{{$c.Name}}</strong>{{end}}{{end}}
+		{{- else}} {{$and}} <span class="damast-coauthor-others" data-tooltip-content="{{range $i, $c := $co}}{{if $i}}, {{end}}{{$c.Name}}{{end}}">{{ctx.Locale.TrPluralString $n "damast.coauthors.others" $n}}</span>
+		{{end}}
+	</span>
+	{{end}}
+</span>

@@ -139,6 +139,10 @@ func DownloadPackageFileByName(ctx *context.Context) {
 			Filename: filename,
 		},
 	)
+	if err == packages_model.ErrPackageNotExist { // DAMAST: hidden packages answer like missing ones (len(pvs) != 1)
+		apiError(ctx, http.StatusNotFound, nil)
+		return
+	}
 	if err != nil {
 		if err == packages_model.ErrPackageFileNotExist {
 			apiError(ctx, http.StatusNotFound, err)

@@ -15,6 +15,7 @@ import (
 	activities_model "forgejo.org/models/activities"
 	asymkey_model "forgejo.org/models/asymkey"
 	auth_model "forgejo.org/models/auth"
+	"forgejo.org/models/damast" // DAMAST:
 	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
@@ -132,11 +133,17 @@ func deleteUser(ctx context.Context, u *user_model.User, purge bool) (err error)
 	); err != nil {
 		return fmt.Errorf("deleteBeans: %w", err)
 	}
+	if err = damast.DeleteUserSecurityData(ctx, u.ID); err != nil { // DAMAST: security advisories
+		return err
+	}
 
 	// Retain the fact that time was tracked, but set DB's `user_id` to NULL.
 	_, err = e.Table(&issues_model.TrackedTime{}).Where("user_id = ?", u.ID).Update(map[string]any{"user_id": nil})
 	if err != nil {
 		return fmt.Errorf("update tracked_time user_id: %w", err)
+	}
+	if err = damast.DeleteOwnerPackageData(ctx, u.ID); err != nil { // DAMAST: repo-bound packages
+		return err
 	}
 
 	if err := auth_model.DeleteOAuth2RelictsByUserID(ctx, u.ID); err != nil {

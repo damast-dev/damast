@@ -1,9 +1,0 @@
-{{/* DAMAST: co-authors from Co-authored-by trailers. Args: Commit (*git.Commit), Size (int), Names (bool) */}}
-{{$size := .Size}}{{$names := .Names}}
-{{range DamastCoAuthors ctx .Commit}}
-	{{if .User}}
-		<a class="damast-coauthor tw-flex tw-items-center tw-ml-1" href="{{.User.HomeLink}}" data-tooltip-content="{{.User.GetDisplayName}}">{{ctx.AvatarUtils.Avatar .User $size}}{{if $names}}<strong class="tw-ml-1">{{.Name}}</strong>{{end}}</a>
-	{{else}}
-		<span class="damast-coauthor tw-flex tw-items-center tw-ml-1" data-tooltip-content="{{.Name}} &lt;{{.Email}}&gt;">{{ctx.AvatarUtils.AvatarByEmail .Email .Name $size}}{{if $names}}<strong class="tw-ml-1">{{.Name}}</strong>{{end}}</span>
-	{{end}}
-{{end}}

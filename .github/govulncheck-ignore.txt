@@ -1,0 +1,2 @@
+# Reachable govulncheck findings we handle ourselves. One ID per line, then why. Remove an entry once a fixed version exists.
+GO-2026-6905 blakesmith/ar has no fixed version; modules/packages/debian rejects negative member sizes before reading (TestDamastParsePackageNegativeMemberSize).

@@ -18,6 +18,16 @@ Docs, designs and tasks live in Jira project **MAST** (jinc.atlassian.net), not 
 4. Code, comments and commit messages in English. Commits end with
    `Co-authored-by: Claude <noreply@anthropic.com>`.
 5. Existing tests stay green; new features come with tests.
+6. **Only complete features ship.** Work in phases if useful, but a feature is merged to `main` only when it is
+   fully done: every part of its design, permission checks, tests (unit + integration, E2E where there is UI
+   behaviour), and the way back to Forgejo documented. Half features stay on their branch.
+7. **Every feature is presented.** The same PR updates `.github/README.md` (what's different, going back table,
+   roadmap). After merge, damast.dev gets a section with real screenshots (repo `damast-dev/damast.dev`).
+8. **Reviewed before merge.** Each feature PR gets at least one independent review that actively tries to break
+   it (permissions, data leaks, edge cases, upstream merge risk). Security-relevant features get a second,
+   security-only review. Findings are fixed or answered in the PR before it is merged.
+9. **CLI too.** If a feature makes sense on the command line, the same feature ships a `mast` command
+   (repo `damast-dev/mast`, see its CLAUDE.md). A feature is only complete when both are done.
 
 ## UI strings
 

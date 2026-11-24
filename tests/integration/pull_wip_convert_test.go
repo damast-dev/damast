@@ -32,7 +32,7 @@ func TestPullWIPConvertSidebar(t *testing.T) {
 			},
 		)
 		sessionOwner.MakeRequest(t, req, http.StatusOK)
-		testPullWIPConvertSidebar(t, sessionOwner, userOwner, testRepo, "6", "Still in progress? Add WIP: prefix")
+		testPullWIPConvertSidebar(t, sessionOwner, userOwner, testRepo, "6", "Convert to draft") // DAMAST: was "Still in progress? Add WIP: prefix"
 		testPullWIPConvertSidebar(t, sessionUnrelated, userOwner, testRepo, "6", "")
 
 		// Add WIP: prefix and check who is seeing the Remove WIP offering
@@ -42,7 +42,7 @@ func TestPullWIPConvertSidebar(t *testing.T) {
 			},
 		)
 		sessionOwner.MakeRequest(t, req, http.StatusOK)
-		testPullWIPConvertSidebar(t, sessionOwner, userOwner, testRepo, "6", "Ready for review? Remove WIP: prefix")
+		testPullWIPConvertSidebar(t, sessionOwner, userOwner, testRepo, "6", "Ready for review") // DAMAST: was "Ready for review? Remove WIP: prefix"
 		testPullWIPConvertSidebar(t, sessionUnrelated, userOwner, testRepo, "6", "")
 	})
 }

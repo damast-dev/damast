@@ -35,6 +35,7 @@ func SetPackagesContext(ctx *context.Context, owner *user_model.User) {
 		ctx.ServerError("IsRepositoryModelExist", err)
 		return
 	}
+	damastSetPackagesContext(ctx, owner) // DAMAST: owner package settings
 }
 
 func SetRuleAddContext(ctx *context.Context) {

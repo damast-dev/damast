@@ -15,6 +15,7 @@
 					<tr>
 						<td class="author">
 							<div class="tw-flex">
+								{{$damastCo := DamastCoAuthors ctx .Commit}}{{if $damastCo}}{{$damastName := .Author.Name}}{{if and .User .User.FullName DefaultShowFullName}}{{$damastName = .User.FullName}}{{end}}{{template "repo/damast/authors" (dict "Co" $damastCo "User" .User "Name" $damastName "Email" .Author.Email "Size" 28 "Mode" "list")}}{{else}}{{/* DAMAST: co-author stack */}}
 								{{$userName := .Author.Name}}
 								{{if .User}}
 									{{if and .User.FullName DefaultShowFullName}}
@@ -25,7 +26,7 @@
 									{{ctx.AvatarUtils.AvatarByEmail .Author.Email .Author.Name 28 "tw-mr-2"}}
 									<span class="author-wrapper">{{$userName}}</span>
 								{{end}}
-								{{template "repo/damast/coauthors" (dict "Commit" .Commit "Size" 20)}}{{/* DAMAST: */}}
+								{{end}}{{/* DAMAST: */}}
 							</div>
 						</td>
 						<td class="sha">
