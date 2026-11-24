@@ -26,8 +26,9 @@
 		</div>
 		{{end}}
 	</div>
+	{{if .Stack.Truncated}}<div class="ui tiny warning message tw-mb-2" id="damast-stack-truncated">{{ctx.Locale.Tr "damast.stack.truncated"}}</div>{{end}}
 	<ol class="damast-stack-layers tw-list-none tw-m-0 tw-p-0">
-		<li class="tw-flex tw-items-center tw-gap-2 tw-py-1 text grey" data-tooltip-content="{{ctx.Locale.Tr "damast.stack.trunk"}}">{{svg "octicon-git-branch" 16}} <code>{{.Stack.Trunk}}</code></li>
+		{{if .Stack.Trunk}}<li class="tw-flex tw-items-center tw-gap-2 tw-py-1 text grey" data-tooltip-content="{{ctx.Locale.Tr "damast.stack.trunk"}}">{{svg "octicon-git-branch" 16}} <code>{{.Stack.Trunk}}</code></li>{{end}}
 		{{range .Stack.Layers}}
 		{{$st := index $d.Status .PR.ID}}
 		{{$current := eq .PR.ID $d.Stack.Current.PR.ID}}

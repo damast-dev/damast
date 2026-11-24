@@ -6,8 +6,11 @@ package structs
 // DamastStack is the stack of pull requests a pull request belongs to (Damast).
 // A pull request sits on top of another when its base branch is that one's head branch.
 type DamastStack struct {
-	// base branch of the bottom layer
+	// base branch of the bottom layer; empty when the stack is truncated and the bottom was not reached
 	Trunk string `json:"trunk"`
+	// the stack has too many pull requests or is circular: the layers shown are incomplete and
+	// rebase and merge are refused (409)
+	Truncated bool `json:"truncated"`
 	// number of the pull request that was asked for
 	Current int64 `json:"current"`
 	// layers in pre-order: every parent comes before its children

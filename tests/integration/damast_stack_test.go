@@ -5,6 +5,7 @@ package integration
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	auth_model "forgejo.org/models/auth"
+	damast_model "forgejo.org/models/damast"
+	"forgejo.org/models/db"
 	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
 	"forgejo.org/models/perm"
@@ -21,7 +24,9 @@ import (
 	"forgejo.org/modules/gitrepo"
 	api "forgejo.org/modules/structs"
 	app_context "forgejo.org/services/context"
+	issue_service "forgejo.org/services/issue"
 	pull_service "forgejo.org/services/pull"
+	repo_service "forgejo.org/services/repository"
 	"forgejo.org/services/repository/commitstatus"
 	files_service "forgejo.org/services/repository/files"
 	"forgejo.org/tests/forgery"
@@ -100,6 +105,18 @@ func (e *damastStackEnv) layer(head, base, title string) *issues_model.PullReque
 	return pr
 }
 
+// rawPR opens a PR head -> base for poster without creating any commit.
+func (e *damastStackEnv) rawPR(poster *user_model.User, head, base, title string) *issues_model.PullRequest {
+	e.t.Helper()
+	issue := &issues_model.Issue{RepoID: e.repo.ID, Title: title, PosterID: poster.ID, Poster: poster, IsPull: true}
+	pr := &issues_model.PullRequest{
+		HeadRepoID: e.repo.ID, BaseRepoID: e.repo.ID, HeadBranch: head, BaseBranch: base,
+		HeadRepo: e.repo, BaseRepo: e.repo, Type: issues_model.PullRequestGitea,
+	}
+	require.NoError(e.t, pull_service.NewPullRequest(e.t.Context(), e.repo, issue, nil, nil, pr, nil))
+	return pr
+}
+
 func (e *damastStackEnv) pr(pr *issues_model.PullRequest) *issues_model.PullRequest {
 	return unittest.AssertExistsAndLoadBean(e.t, &issues_model.PullRequest{ID: pr.ID})
 }
@@ -130,9 +147,7 @@ func (e *damastStackEnv) action(pr *issues_model.PullRequest, action, token stri
 	for _, l := range e.stack(pr, e.token, http.StatusOK).Layers {
 		heads[fmt.Sprint(l.Number)] = l.HeadSHA
 	}
-	for k, v := range override {
-		heads[k] = v
-	}
+	maps.Copy(heads, override)
 	req := NewRequestWithJSON(e.t, "POST", e.url(pr, "/"+action), &api.DamastStackActionOption{Heads: heads}).AddTokenAuth(token)
 	var res api.DamastStackActionResult
 	DecodeJSON(e.t, MakeRequest(e.t, req, status), &res)
@@ -205,26 +220,169 @@ func TestDamastStack(t *testing.T) {
 			assert.False(t, e.pr(b).HasMerged)
 		})
 
-		t.Run("retarget after merge when the branch is kept", func(t *testing.T) {
+		t.Run("retarget only when the head branch is deleted", func(t *testing.T) {
 			e := newDamastStackEnv(t, false, nil)
 			a := e.layer("a", "main", "Layer A")
 			b := e.layer("b", "a", "Layer B")
 			session := loginUser(t, e.owner.Name)
 			testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(a.Index), repo_model.MergeStyleMerge, false)
-
 			assert.True(t, e.pr(a).HasMerged)
+			assert.Equal(t, "a", e.pr(b).BaseBranch, "branch kept: nothing is retargeted")
+
+			// deleting the branch later retargets the PRs on top of it, like GitHub
+			gitRepo, err := gitrepo.OpenRepository(t.Context(), e.repo)
+			require.NoError(t, err)
+			defer gitRepo.Close()
+			require.NoError(t, repo_service.DeleteBranch(t.Context(), e.owner, e.repo, gitRepo, "a"))
 			assert.Equal(t, "main", e.pr(b).BaseBranch)
-			_, err := e.headOf("a")
-			require.NoError(t, err, "branch a is kept")
 			unittest.AssertExistsAndLoadBean(t, &issues_model.Comment{IssueID: b.IssueID, Type: issues_model.CommentTypeChangeTargetBranch, OldRef: "a", NewRef: "main"})
 
-			// a protected head branch is long-lived: PRs aimed at it stay
-			c := e.layer("develop", "main", "Develop")
+			// delete after merge
+			c := e.layer("c", "main", "Layer C")
+			d := e.layer("d", "c", "Layer D")
+			testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(c.Index), repo_model.MergeStyleMerge, true)
+			assert.Equal(t, "main", e.pr(d).BaseBranch)
+		})
+
+		t.Run("PRs outside the stack are untouched", func(t *testing.T) {
+			e := newDamastStackEnv(t, false, nil)
+			dev := e.layer("develop", "main", "Develop")
 			f := e.layer("feature", "develop", "Feature")
-			require.NoError(t, git_model.UpdateProtectBranch(t.Context(), e.repo, &git_model.ProtectedBranch{RepoID: e.repo.ID, RuleName: "develop", CanPush: true}, git_model.WhitelistOptions{}))
-			testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(c.Index), repo_model.MergeStyleMerge, false)
-			assert.True(t, e.pr(c).HasMerged)
-			assert.Equal(t, "develop", e.pr(f).BaseBranch)
+			session := loginUser(t, e.owner.Name)
+			testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(dev.Index), repo_model.MergeStyleMerge, false)
+			assert.True(t, e.pr(dev).HasMerged)
+			assert.Equal(t, "develop", e.pr(f).BaseBranch, "develop stays, so feature stays on it")
+		})
+
+		t.Run("the default branch is never a layer", func(t *testing.T) {
+			writer := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 4})
+			e := newDamastStackEnv(t, false, map[*user_model.User]perm.AccessMode{writer: perm.AccessModeWrite})
+			a := e.layer("a", "main", "Layer A")
+			e.commit("main", "main", "main-only.txt", "after a forked")
+			mainBefore, err := e.headOf("main")
+			require.NoError(t, err)
+			x := e.rawPR(writer, "main", "a", "sync main into a") // head main, base a
+			for _, pr := range []*issues_model.PullRequest{a, x} {
+				s := e.stack(pr, e.token, http.StatusOK)
+				assert.Len(t, s.Layers, 1, "#%d", pr.Index)
+				assert.False(t, s.Truncated)
+			}
+			e.action(a, "rebase", e.token, http.StatusForbidden, nil)
+			mainAfter, err := e.headOf("main")
+			require.NoError(t, err)
+			assert.Equal(t, mainBefore, mainAfter)
+
+			// defence in depth: even called directly, the rebase refuses
+			require.NoError(t, x.LoadAttributes(t.Context()))
+			x.BaseRepo, x.HeadRepo = e.repo, e.repo
+			err = pull_service.DamastRebaseUpdate(t.Context(), x, e.owner, mainBefore, "")
+			require.ErrorIs(t, err, pull_service.ErrDamastLongLivedBranch)
+			mainAfter, _ = e.headOf("main")
+			assert.Equal(t, mainBefore, mainAfter)
+		})
+
+		t.Run("a protected head does not block the stack", func(t *testing.T) {
+			writer := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: 4})
+			e := newDamastStackEnv(t, false, map[*user_model.User]perm.AccessMode{writer: perm.AccessModeWrite})
+			a := e.layer("a", "main", "Layer A")
+			b := e.layer("b", "a", "Layer B")
+			e.commit("main", "main", "main.txt", "moved")
+			require.NoError(t, git_model.UpdateProtectBranch(t.Context(), e.repo, &git_model.ProtectedBranch{RepoID: e.repo.ID, RuleName: "main", CanPush: true}, git_model.WhitelistOptions{}))
+			e.rawPR(writer, "main", "b", "grief") // head main, base b
+			res := e.action(b, "rebase", e.token, http.StatusOK, nil)
+			assert.Equal(t, []int64{a.Index, b.Index}, res.Done)
+		})
+
+		t.Run("a circular stack is shown but refused", func(t *testing.T) {
+			e := newDamastStackEnv(t, false, nil)
+			e.commit("main", "x", "x.txt", "x")
+			e.commit("main", "y", "y.txt", "y")
+			p1 := e.rawPR(e.owner, "x", "y", "x into y")
+			p2 := e.rawPR(e.owner, "y", "x", "y into x")
+			s := e.stack(p2, e.token, http.StatusOK)
+			assert.True(t, s.Truncated)
+			assert.Empty(t, s.Trunk)
+			assert.Len(t, s.Layers, 2)
+			for _, action := range []string{"rebase", "merge"} {
+				res := e.action(p2, action, e.token, http.StatusConflict, nil)
+				assert.Empty(t, res.Done)
+				assert.Contains(t, res.Message, "circular")
+			}
+			assert.False(t, e.pr(p1).HasMerged, "nothing was merged")
+		})
+
+		t.Run("too many pull requests are shown capped and refused", func(t *testing.T) {
+			e := newDamastStackEnv(t, false, nil)
+			a := e.layer("a", "main", "Layer A")
+			var last *issues_model.PullRequest
+			for i := range 105 { // rows only: creating 105 real pull requests takes minutes
+				issue := &issues_model.Issue{RepoID: e.repo.ID, Index: int64(100 + i), Title: fmt.Sprint(i), PosterID: e.owner.ID, IsPull: true}
+				require.NoError(t, db.Insert(t.Context(), issue))
+				last = &issues_model.PullRequest{
+					IssueID: issue.ID, Index: issue.Index, HeadRepoID: e.repo.ID, BaseRepoID: e.repo.ID,
+					HeadBranch: fmt.Sprintf("f%d", i), BaseBranch: "a", Flow: issues_model.PullRequestFlowGithub,
+				}
+				require.NoError(t, db.Insert(t.Context(), last))
+			}
+			for _, pr := range []*issues_model.PullRequest{a, last} {
+				s := e.stack(pr, e.token, http.StatusOK)
+				assert.True(t, s.Truncated)
+				assert.Len(t, s.Layers, 100)
+				assert.Equal(t, "main", s.Trunk)
+				e.action(pr, "rebase", e.token, http.StatusConflict, nil)
+				res := e.action(pr, "merge", e.token, http.StatusConflict, nil)
+				assert.Empty(t, res.Done)
+			}
+			assert.False(t, e.pr(a).HasMerged)
+		})
+
+		t.Run("squash-merged parent: the rebase replays only the layer's own commits", func(t *testing.T) {
+			e := newDamastStackEnv(t, false, nil)
+			a := e.layer("a", "main", "Layer A")
+			e.commit("a", "a", "x.txt", "1")
+			e.commit("a", "a", "x.txt", "2") // a edits x twice, the squash has only the last version
+			b := e.layer("b", "a", "Layer B")
+			session := loginUser(t, e.owner.Name)
+			testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(a.Index), repo_model.MergeStyleSquash, true)
+			require.Equal(t, "main", e.pr(b).BaseBranch)
+			res := e.action(b, "rebase", e.token, http.StatusOK, nil)
+			assert.Equal(t, []int64{b.Index}, res.Done, "a plain rebase would conflict on a's first x.txt commit")
+			assert.True(t, e.hasFile("b", "b.txt") && e.hasFile("b", "x.txt"))
+			// a layer that is not stacked and has no merged parent is not rebased
+			c := e.layer("c", "main", "Layer C")
+			e.commit("main", "main", "main.txt", "moved")
+			e.action(c, "rebase", e.token, http.StatusForbidden, nil)
+		})
+
+		t.Run("stack base records are cleaned up", func(t *testing.T) {
+			setup := func() (*damastStackEnv, *issues_model.PullRequest) {
+				e := newDamastStackEnv(t, false, nil)
+				a := e.layer("a", "main", "Layer A")
+				b := e.layer("b", "a", "Layer B")
+				session := loginUser(t, e.owner.Name)
+				testPullMerge(t, session, e.owner.Name, e.repo.Name, fmt.Sprint(a.Index), repo_model.MergeStyleMerge, false)
+				head, err := damast_model.GetStackBase(t.Context(), b.ID)
+				require.NoError(t, err)
+				require.NotEmpty(t, head, "recorded when the parent was merged")
+				return e, b
+			}
+			// the pull request is deleted
+			e, b := setup()
+			gitRepo, err := gitrepo.OpenRepository(t.Context(), e.repo)
+			require.NoError(t, err)
+			defer gitRepo.Close()
+			issue := unittest.AssertExistsAndLoadBean(t, &issues_model.Issue{ID: b.IssueID})
+			require.NoError(t, issue_service.DeleteIssue(t.Context(), e.owner, gitRepo, issue))
+			head, err := damast_model.GetStackBase(t.Context(), b.ID)
+			require.NoError(t, err)
+			assert.Empty(t, head)
+
+			// the repository (and so its owner's repositories) is deleted
+			e, b = setup()
+			require.NoError(t, repo_service.DeleteRepositoryDirectly(t.Context(), e.repo.ID, repo_service.DeleteRepositoryOpts{}))
+			head, err = damast_model.GetStackBase(t.Context(), b.ID)
+			require.NoError(t, err)
+			assert.Empty(t, head)
 		})
 
 		t.Run("rebase stack", func(t *testing.T) {
@@ -267,9 +425,13 @@ func TestDamastStack(t *testing.T) {
 			})
 
 			t.Run("protected branch", func(t *testing.T) {
+				// c is long-lived now: it leaves the stack, and is not rebased
 				require.NoError(t, git_model.UpdateProtectBranch(t.Context(), e.repo, &git_model.ProtectedBranch{RepoID: e.repo.ID, RuleName: "c", CanPush: true}, git_model.WhitelistOptions{}))
-				res := e.action(a, "rebase", e.token, http.StatusForbidden, nil)
-				assert.Empty(t, res.Done)
+				assert.Len(t, e.stack(a, e.token, http.StatusOK).Layers, 2)
+				cBefore, _ := e.headOf("c")
+				e.action(a, "rebase", e.token, NoExpectedStatus, nil)
+				cAfter, _ := e.headOf("c")
+				assert.Equal(t, cBefore, cAfter)
 			})
 		})
 
@@ -302,7 +464,7 @@ func TestDamastStack(t *testing.T) {
 			assert.True(t, e.pr(b).HasMerged)
 			assert.Equal(t, "main", e.pr(b).BaseBranch)
 			assert.False(t, e.pr(c).HasMerged)
-			assert.Equal(t, "main", e.pr(c).BaseBranch, "retargeted onto the trunk")
+			assert.Equal(t, "b", e.pr(c).BaseBranch, "the branch is kept, so nothing is retargeted")
 			assert.True(t, e.hasFile("main", "b.txt"))
 		})
 

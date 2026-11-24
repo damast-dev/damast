@@ -174,5 +174,8 @@
 	"damast.stack.stopped_at": "Stopped at #%d: %s",
 	"damast.stack.reason_rebase_conflict": "rebasing commit %s caused a conflict. Rebase this layer locally, push it, then rebase the stack again.",
 	"damast.stack.reason_moved": "the pull request changed since the page was loaded. Reload and try again.",
-	"damast.stack.reason_internal": "an internal error occurred. The server log has the details."
+	"damast.stack.reason_internal": "an internal error occurred. The server log has the details.",
+	"damast.stack.reason_truncated": "the stack has more than %d pull requests or is circular. Split it up or fix the branches, then try again.",
+	"damast.stack.reason_protected": "the default branch and protected branches are not part of a stack action.",
+	"damast.stack.truncated": "This stack has more than 100 pull requests or is circular, so only part of it is shown. Rebase and merge are not offered."
 }

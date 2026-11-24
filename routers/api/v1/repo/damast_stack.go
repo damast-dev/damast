@@ -83,7 +83,7 @@ func GetPullRequestDamastStack(ctx *context.APIContext) {
 		ctx.Error(http.StatusInternalServerError, "LoadStatus", err)
 		return
 	}
-	res := &api.DamastStack{Trunk: s.Trunk, Current: s.Current.PR.Index, Layers: make([]*api.DamastStackLayer, 0, len(s.Layers))}
+	res := &api.DamastStack{Trunk: s.Trunk, Truncated: s.Truncated, Current: s.Current.PR.Index, Layers: make([]*api.DamastStackLayer, 0, len(s.Layers))}
 	for _, l := range s.Layers {
 		st := status[l.PR.ID]
 		layer := &api.DamastStackLayer{
