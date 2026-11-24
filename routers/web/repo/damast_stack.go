@@ -42,7 +42,7 @@ func damastStackData(ctx *context.Context, pull *issues_model.PullRequest) {
 	}
 	data := map[string]any{"Stack": s, "Status": status, "Heads": strings.Join(heads, ",")}
 
-	if ctx.Doer != nil && !ctx.Repo.Repository.IsArchived {
+	if ctx.Doer != nil && !ctx.Repo.Repository.IsArchived && !s.Truncated {
 		if data["CanRebase"], err = s.IsUserAllowedToRebase(ctx, ctx.Doer); err != nil {
 			log.Error("damast stack rebase permission: %v", err)
 		}
@@ -68,7 +68,7 @@ func damastStackData(ctx *context.Context, pull *issues_model.PullRequest) {
 // damastParseHeads parses "1:sha,2:sha" (web form) into PR index -> head commit.
 func damastParseHeads(s string) map[int64]string {
 	heads := map[int64]string{}
-	for _, pair := range strings.Split(s, ",") {
+	for pair := range strings.SplitSeq(s, ",") {
 		index, sha, ok := strings.Cut(pair, ":")
 		if n, err := strconv.ParseInt(index, 10, 64); ok && err == nil && sha != "" {
 			heads[n] = sha

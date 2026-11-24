@@ -174,5 +174,8 @@
 	"damast.stack.stopped_at": "Angehalten bei #%d: %s",
 	"damast.stack.reason_rebase_conflict": "beim Rebase von Commit %s ist ein Konflikt aufgetreten. Setze diese Ebene lokal neu auf, pushe sie und rebase den Stapel dann erneut.",
 	"damast.stack.reason_moved": "der Pull-Request hat sich geändert, seit die Seite geladen wurde. Lade sie neu und versuche es noch einmal.",
-	"damast.stack.reason_internal": "ein interner Fehler ist aufgetreten. Details stehen im Server-Log."
+	"damast.stack.reason_internal": "ein interner Fehler ist aufgetreten. Details stehen im Server-Log.",
+	"damast.stack.reason_truncated": "der Stapel hat mehr als %d Pull-Requests oder ist zirkulär. Teile ihn auf oder korrigiere die Branches und versuche es dann erneut.",
+	"damast.stack.reason_protected": "der Standard-Branch und geschützte Branches gehören nicht zu einer Stapel-Aktion.",
+	"damast.stack.truncated": "Dieser Stapel hat mehr als 100 Pull-Requests oder ist zirkulär, daher ist nur ein Teil zu sehen. Rebase und Merge werden nicht angeboten."
 }

@@ -27950,8 +27950,13 @@
           },
           "x-go-name": "Layers"
         },
+        "truncated": {
+          "description": "the stack has too many pull requests or is circular: the layers shown are incomplete and\nrebase and merge are refused (409)",
+          "type": "boolean",
+          "x-go-name": "Truncated"
+        },
         "trunk": {
-          "description": "base branch of the bottom layer",
+          "description": "base branch of the bottom layer; empty when the stack is truncated and the bottom was not reached",
           "type": "string",
           "x-go-name": "Trunk"
         }

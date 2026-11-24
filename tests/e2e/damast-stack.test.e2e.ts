@@ -68,9 +68,8 @@ test('Stack map, rebase stack and merge up to here', async ({page}) => {
   await expect(page.locator('.flash-success')).toContainText('Merged #1, #2, #3.', {timeout: 60000});
   await expect(page.locator('.issue-state-label')).toContainText('Merged');
 
-  // the draft layer was retargeted onto main and is on its own now
+  // the draft layer stays on the kept branch of #3 (a merge alone retargets nothing) and is on its own now
   await page.goto('/user2/stacked-prs/pulls/4');
-  await expect(page.locator('#branch_target')).toContainText('main');
   await expect(page.locator('#damast-stack')).toHaveCount(0);
 });
 

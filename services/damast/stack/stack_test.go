@@ -4,9 +4,11 @@
 package stack
 
 import (
+	"fmt"
 	"testing"
 
 	"forgejo.org/models/db"
+	git_model "forgejo.org/models/git"
 	issues_model "forgejo.org/models/issues"
 	"forgejo.org/models/unittest"
 
@@ -89,9 +91,70 @@ func TestFind(t *testing.T) {
 		s, err := Find(t.Context(), p)
 		require.NoError(t, err)
 		assert.Len(t, s.Layers, 2)
+		assert.True(t, s.Truncated, "a cycle is unsupported")
+		assert.Empty(t, s.Trunk, "no trunk was reached")
 		s, err = Find(t.Context(), q)
 		require.NoError(t, err)
 		assert.Len(t, s.Layers, 2)
+		assert.True(t, s.Truncated)
+	})
+
+	t.Run("default and protected branches are not layers", func(t *testing.T) {
+		require.NoError(t, db.Insert(t.Context(), &git_model.ProtectedBranch{RepoID: 1, RuleName: "st-prot"}))
+		a := addPR(t, "st-la", "st-main", 1, false)
+		// "sync the default branch into a": head is the default branch
+		syncDefault := addPR(t, "master", "st-la", 1, false)
+		// a PR from a protected branch into a
+		syncProt := addPR(t, "st-prot", "st-la", 1, false)
+		// a PR on top of a protected branch is the bottom of its own stack
+		onProt := addPR(t, "st-lb", "st-prot", 1, false)
+		for _, pr := range []*issues_model.PullRequest{a, syncDefault, syncProt, onProt} {
+			s, err := Find(t.Context(), pr)
+			require.NoError(t, err)
+			assert.False(t, s.IsStacked(), pr.HeadBranch)
+			assert.False(t, s.Truncated)
+			assert.Equal(t, pr.BaseBranch, s.Trunk)
+		}
+	})
+
+	t.Run("maxLayers caps fan-out", func(t *testing.T) {
+		root := addPR(t, "st-fr", "st-main", 1, false)
+		var last *issues_model.PullRequest
+		for range maxLayers * 2 {
+			last = addPR(t, fmt.Sprintf("st-f%d", nextIndex), "st-fr", 1, false)
+		}
+		for _, pr := range []*issues_model.PullRequest{root, last} {
+			s, err := Find(t.Context(), pr)
+			require.NoError(t, err)
+			assert.Len(t, s.Layers, maxLayers)
+			assert.True(t, s.Truncated)
+			assert.Equal(t, "st-main", s.Trunk, "the bottom was reached")
+			assert.Contains(t, numbers(s), pr.HeadBranch, "the asked-for PR is always shown")
+		}
+	})
+
+	t.Run("deep chains never report a wrong trunk", func(t *testing.T) {
+		var chain []*issues_model.PullRequest
+		for i := range maxLayers + 50 {
+			base := "st-main"
+			if i > 0 {
+				base = chain[i-1].HeadBranch
+			}
+			chain = append(chain, addPR(t, fmt.Sprintf("st-c%d", i), base, 1, false))
+		}
+		for _, pr := range []*issues_model.PullRequest{chain[maxLayers+1], chain[maxLayers+49]} {
+			s, err := Find(t.Context(), pr)
+			require.NoError(t, err)
+			assert.True(t, s.Truncated)
+			assert.Empty(t, s.Trunk, "the bottom was not reached")
+			assert.LessOrEqual(t, len(s.Layers), maxLayers)
+			assert.Contains(t, numbers(s), pr.HeadBranch)
+		}
+		s, err := Find(t.Context(), chain[10])
+		require.NoError(t, err)
+		assert.True(t, s.Truncated, "more than maxLayers on top")
+		assert.Equal(t, "st-main", s.Trunk)
+		assert.ErrorIs(t, func() error { _, err := Rebase(t.Context(), s, nil, nil); return err }(), ErrTruncated)
 	})
 
 	t.Run("several PRs from one branch", func(t *testing.T) {

@@ -30,6 +30,8 @@ type mergeContext struct {
 	committer *git.Signature
 	signKeyID string // empty for no-sign, non-empty to sign
 	env       []string
+
+	damastOnto string // DAMAST: rebase only the commits after this one (stacked pull requests)
 }
 
 func (ctx *mergeContext) RunOpts() *git.RunOpts {
@@ -265,7 +267,7 @@ func rebaseTrackingOnToBase(ctx *mergeContext, mergeStyle repo_model.MergeStyle)
 		// Use git-replay for performance and to preserve unknown headers,
 		// like the "change-id" header used by Jujutsu and GitButler.
 		if err := git.NewCommand(ctx, "replay", "--onto").AddDynamicArguments(baseBranch).
-			AddDynamicArguments(fmt.Sprintf("%s..%s", baseBranch, stagingBranch)).
+			AddDynamicArguments(fmt.Sprintf("%s..%s", ctx.damastRebaseFrom(), stagingBranch)). // DAMAST: stacked pull requests
 			Run(ctx.RunOpts()); err != nil {
 			// git-replay doesn't tell us which commit first created a merge conflict.
 			// In order to preserve the quality of our error messages, fall back to
@@ -315,8 +317,8 @@ regular_rebase:
 	ctx.errbuf.Reset()
 
 	// Rebase before merging
-	if err := git.NewCommand(ctx, "rebase").AddDynamicArguments(baseBranch).
-		Run(ctx.RunOpts()); err != nil {
+	if err := ctx.damastRebaseCommand().
+		Run(ctx.RunOpts()); err != nil { // DAMAST: stacked pull requests
 		// Rebase will leave a REBASE_HEAD file in .git if there is a conflict
 		if _, statErr := os.Stat(filepath.Join(ctx.tmpBasePath, ".git", "REBASE_HEAD")); statErr == nil {
 			var commitSha string
