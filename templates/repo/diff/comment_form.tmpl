@@ -18,7 +18,8 @@
 			"TextareaPlaceholder" (ctx.Locale.Tr "repo.diff.comment.placeholder")
 			"DropzoneParentContainer" "form"
 			"DisableAutosize" "true"
-		)}}
+			"DamastSuggest" $.root.PageIsPullFiles
+		)}}{{/* DAMAST: Suggest button */}}
 
 		{{if $.root.IsAttachmentEnabled}}
 			<div class="field">

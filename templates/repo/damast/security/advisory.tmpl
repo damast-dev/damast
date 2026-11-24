@@ -1,0 +1,164 @@
+{{/* DAMAST: one security advisory. Strings: options/locale_damast. */}}
+{{template "base/head" .}}
+{{$a := .DamastAdvisory}}
+{{$link := print .RepoLink "/security/advisories/" $a.AdvisoryID}}
+<div role="main" aria-label="{{.Title}}" class="page-content repository damast-security">
+	{{template "repo/header" .}}
+	<div class="ui container">
+		{{template "base/alert" .}}
+		<div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
+			<h2 class="tw-flex-1 tw-m-0" id="damast-advisory-title">{{$a.Title}}</h2>
+			{{if .DamastIsAdvisoryAdmin}}<a class="ui small basic button" href="{{$link}}/edit">{{ctx.Locale.Tr "edit"}}</a>{{end}}
+			{{if $a.IsPublished}}<a class="ui small basic button" href="{{AppSubUrl}}/api/v1/repos/{{.Repository.OwnerName}}/{{.Repository.Name}}/security-advisories/{{$a.AdvisoryID}}/osv">{{ctx.Locale.Tr "damast.security.osv_link"}}</a>{{end}}
+		</div>
+		<div class="tw-my-2">
+			{{template "repo/damast/security/labels" $a}}
+			<span class="text grey">{{$a.AdvisoryID}}</span>
+			{{if $a.PublishedUnix}} · {{ctx.Locale.Tr "damast.security.published_at" (DateUtils.TimeSince $a.PublishedUnix)}}{{end}}
+			{{if and $a.IsPublished (gt $a.UpdatedUnix $a.PublishedUnix)}} · {{ctx.Locale.Tr "damast.security.modified_at" (DateUtils.TimeSince $a.UpdatedUnix)}}{{end}}
+		</div>
+
+		{{if $a.WithdrawnUnix}}
+			<div class="ui error message" id="damast-advisory-withdrawn">{{svg "octicon-circle-slash"}} {{ctx.Locale.Tr "damast.security.withdrawn_notice" (DateUtils.TimeSince $a.WithdrawnUnix)}}</div>
+		{{end}}
+		{{if not $a.IsPublished}}
+			<div class="ui warning message" id="damast-advisory-private">{{svg "octicon-lock"}} {{ctx.Locale.Tr "damast.security.private_notice"}}</div>
+		{{end}}
+
+		<div class="ui stackable grid">
+			<div class="eleven wide column">
+				<div class="ui segment markup" id="damast-advisory-description">{{.DamastDescription}}</div>
+
+				<h4 class="ui top attached header">{{ctx.Locale.Tr "damast.security.field.affected"}}</h4>
+				<div class="ui attached segment">
+					{{if $a.Affected}}
+						<table class="ui very basic table">
+							<thead><tr>
+								<th>{{ctx.Locale.Tr "damast.security.field.ecosystem"}}</th>
+								<th>{{ctx.Locale.Tr "damast.security.field.package"}}</th>
+								<th>{{ctx.Locale.Tr "damast.security.field.vulnerable"}}</th>
+								<th>{{ctx.Locale.Tr "damast.security.field.patched"}}</th>
+							</tr></thead>
+							<tbody>
+								{{range $a.Affected}}
+									<tr><td>{{.Ecosystem}}</td><td><code>{{.Package}}</code></td><td><code>{{.VulnerableRange}}</code></td><td><code>{{.Patched}}</code></td></tr>
+								{{end}}
+							</tbody>
+						</table>
+					{{else}}
+						<p>{{ctx.Locale.Tr "damast.security.no_affected"}}</p>
+					{{end}}
+				</div>
+
+				{{if .DamastIsParticipant}}
+					<h4 class="ui top attached header">{{svg "octicon-lock"}} {{ctx.Locale.Tr "damast.security.discussion"}}</h4>
+					<div class="ui attached segment" id="damast-advisory-comments">
+						<p class="help">{{ctx.Locale.Tr "damast.security.discussion_help"}}</p>
+						{{range .DamastComments}}
+							<div class="ui segment damast-advisory-comment">
+								<div class="tw-mb-2">
+									{{ctx.AvatarUtils.Avatar .Poster 20}}
+									<b>{{.Poster.GetDisplayName}}</b>
+									<span class="text grey">{{DateUtils.TimeSince .Comment.CreatedUnix}}</span>
+								</div>
+								<div class="markup">{{.Rendered}}</div>
+								{{if .CanEdit}}
+									<details class="tw-mt-2 damast-advisory-comment-edit">
+										<summary class="text grey">{{ctx.Locale.Tr "edit"}}</summary>
+										<form class="ui form tw-mt-2" action="{{$link}}/comments/{{.Comment.ID}}/edit" method="post">
+											<textarea name="content" rows="4" aria-label="{{ctx.Locale.Tr "edit"}}">{{.Comment.Content}}</textarea>
+											<button class="ui primary small button tw-mt-2">{{ctx.Locale.Tr "save"}}</button>
+										</form>
+										<form class="tw-mt-2" action="{{$link}}/comments/{{.Comment.ID}}/delete" method="post" data-damast-confirm="{{ctx.Locale.Tr "damast.security.comment_delete_confirm"}}">
+											<button class="ui red basic small button">{{ctx.Locale.Tr "remove"}}</button>
+										</form>
+									</details>
+								{{end}}
+							</div>
+						{{end}}
+						{{if not .DamastReadOnly}}<form class="ui form" action="{{$link}}/comments" method="post">
+							{{template "shared/combomarkdowneditor" (dict
+								"MarkdownPreviewUrl" (print .RepoLink "/markup")
+								"MarkdownPreviewContext" .RepoLink
+								"TextareaName" "content"
+								"TextareaAriaLabel" (ctx.Locale.Tr "damast.security.discussion")
+							)}}
+							<button class="ui primary button tw-mt-2">{{ctx.Locale.Tr "repo.issues.create_comment"}}</button>
+						</form>{{end}}
+					</div>
+				{{end}}
+			</div>
+
+			<div class="five wide column">
+				{{if and .DamastIsAdvisoryAdmin (ne $a.State "withdrawn")}}
+					<div class="ui segment" id="damast-advisory-actions">
+						<form class="ui form" action="{{$link}}/state" method="post"{{if eq $a.State "published"}} data-damast-confirm="{{ctx.Locale.Tr "damast.security.withdraw_confirm"}}"{{end}}>
+							{{if eq $a.State "triage"}}
+								<button class="ui primary fluid button tw-mb-2" name="state" value="draft">{{ctx.Locale.Tr "damast.security.action.accept"}}</button>
+								<button class="ui basic red fluid button" name="state" value="closed">{{ctx.Locale.Tr "damast.security.action.close"}}</button>
+							{{else if eq $a.State "draft"}}
+								<button class="ui primary fluid button tw-mb-2" name="state" value="published">{{ctx.Locale.Tr "damast.security.action.publish"}}</button>
+								<button class="ui basic red fluid button" name="state" value="closed">{{ctx.Locale.Tr "damast.security.action.close"}}</button>
+							{{else if eq $a.State "closed"}}
+								<button class="ui basic fluid button" name="state" value="draft">{{ctx.Locale.Tr "damast.security.action.reopen"}}</button>
+							{{else if eq $a.State "published"}}
+								<button class="ui basic red fluid button" name="state" value="withdrawn">{{ctx.Locale.Tr "damast.security.action.withdraw"}}</button>
+							{{end}}
+						</form>
+						{{if eq $a.State "draft"}}<p class="help tw-mt-2">{{ctx.Locale.Tr "damast.security.publish_help"}}</p>{{end}}
+						{{if eq $a.State "published"}}<p class="help tw-mt-2">{{ctx.Locale.Tr "damast.security.withdraw_help"}}</p>{{end}}
+					</div>
+				{{end}}
+
+				<div class="ui segment">
+					{{if .DamastScore}}
+						<p><b>{{ctx.Locale.Tr "damast.security.field.cvss"}}</b><br><span id="damast-advisory-score">{{.DamastScore}}</span> <code class="tw-break-anywhere">{{$a.CVSSVector}}</code></p>
+					{{end}}
+					{{if $a.CVEID}}<p><b>{{ctx.Locale.Tr "damast.security.field.cve"}}</b><br>{{$a.CVEID}}</p>{{end}}
+					{{if $a.CWEIDs}}
+						<p><b>{{ctx.Locale.Tr "damast.security.field.cwe"}}</b><br>
+							{{range $a.CWEIDs}}<a class="ui small basic label" href="https://cwe.mitre.org/data/definitions/{{StringUtils.RemoveAllPrefix . "CWE-"}}.html" target="_blank" rel="noopener noreferrer">{{.}}</a>{{end}}
+						</p>
+					{{end}}
+					{{if .DamastCredits}}
+						<p><b>{{ctx.Locale.Tr "damast.security.field.credits"}}</b></p>
+						{{range .DamastCredits}}
+							<div>{{ctx.AvatarUtils.Avatar .User 20}} <a href="{{.User.HomeLink}}">{{.User.GetDisplayName}}</a> <span class="text grey">{{ctx.Locale.Tr (print "damast.security.credit_type." .Type)}}</span></div>
+						{{end}}
+					{{end}}
+				</div>
+
+				{{if .DamastIsParticipant}}
+					<div class="ui segment" id="damast-advisory-people">
+						{{if .DamastReporter}}<p><b>{{ctx.Locale.Tr "damast.security.reporter"}}</b><br>{{ctx.AvatarUtils.Avatar .DamastReporter 20}} {{.DamastReporter.GetDisplayName}}</p>{{end}}
+						<p><b>{{ctx.Locale.Tr "damast.security.created_by"}}</b><br>{{ctx.AvatarUtils.Avatar .DamastCreator 20}} {{.DamastCreator.GetDisplayName}}</p>
+						<p><b>{{ctx.Locale.Tr "damast.security.collaborators"}}</b></p>
+						<p class="help">{{ctx.Locale.Tr "damast.security.collaborators_help"}}</p>
+						{{range .DamastCollaborators}}
+							<div class="tw-flex tw-items-center tw-gap-1 tw-mb-1">
+								{{ctx.AvatarUtils.Avatar . 20}} <span class="tw-flex-1">{{.Name}}</span>
+								{{if $.DamastIsAdvisoryAdmin}}
+									<form action="{{$link}}/collaborators/remove" method="post">
+										<input type="hidden" name="username" value="{{.Name}}">
+										<button class="ui mini basic button">{{ctx.Locale.Tr "remove"}}</button>
+									</form>
+								{{end}}
+							</div>
+						{{else}}
+							<p>{{ctx.Locale.Tr "damast.security.collaborators_none"}}</p>
+						{{end}}
+						{{if .DamastIsAdvisoryAdmin}}
+							<form class="ui form tw-mt-2" action="{{$link}}/collaborators" method="post">
+								<div class="ui fluid action input">
+									<input name="username" placeholder="{{ctx.Locale.Tr "username"}}" aria-label="{{ctx.Locale.Tr "username"}}" required>
+									<button class="ui button">{{ctx.Locale.Tr "add"}}</button>
+								</div>
+							</form>
+						{{end}}
+					</div>
+				{{end}}
+			</div>
+		</div>
+	</div>
+</div>
+{{template "base/footer" .}}

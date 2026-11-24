@@ -61,13 +61,15 @@ export default {
       this.refNameText = this.tagName;
     }
 
+    this.damastUnmounted = new AbortController(); // DAMAST: the file tree's content swap unmounts this
     document.body.addEventListener('click', (event) => {
       if (this.$el.contains(event.target)) return;
       if (this.menuVisible) {
         this.menuVisible = false;
       }
-    });
+    }, {signal: this.damastUnmounted.signal}); // DAMAST:
   },
+  unmounted() { this.damastUnmounted.abort() }, // DAMAST:
   methods: {
     selectItem(item) {
       const prev = this.getSelected();

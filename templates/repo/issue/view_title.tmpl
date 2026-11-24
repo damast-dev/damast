@@ -7,7 +7,7 @@
 	{{$canEditIssueTitle := and (or .HasIssuesOrPullsWritePermission .IsIssuePoster) (not .Repository.IsArchived)}}
 	<div class="issue-title" id="issue-title-display">
 		<h1 class="tw-break-anywhere">
-			{{RenderIssueTitle $.Context .Issue.Title ($.Repository.ComposeMetas ctx)}}				<span class="index">#{{.Issue.Index}}</span>
+			{{RenderIssueTitle $.Context (DamastPullTitle .Issue.Title .Issue.IsPull) ($.Repository.ComposeMetas ctx)}}{{/* DAMAST: draft PR title without prefix */}}				<span class="index">#{{.Issue.Index}}</span>
 		</h1>
 		<div class="button-row">
 			{{if $canEditIssueTitle}}

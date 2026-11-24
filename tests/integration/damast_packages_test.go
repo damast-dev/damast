@@ -21,6 +21,7 @@ import (
 	"forgejo.org/models/unittest"
 	user_model "forgejo.org/models/user"
 	api "forgejo.org/modules/structs"
+	app_context "forgejo.org/services/context"
 	"forgejo.org/tests"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,7 @@ import (
 // user4 is a write collaborator on user5/repo4 (fixtures) but has no owner-level package access on user5.
 func TestDamastRepoBoundPackages(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 
@@ -109,6 +111,7 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 		session.MakeRequest(t, NewRequestWithValues(t, "POST", link, map[string]string{
 			"action": "damast_inherit",
 		}), http.StatusSeeOther)
+		assert.Equal(t, "success%3DPackage%2Baccess%2Bsettings%2Bupdated.", session.GetCookie(app_context.CookieNameFlash).Value)
 
 		inherit, err := damast.InheritsRepoAccess(ctx, pkg("repo4").ID)
 		require.NoError(t, err)
@@ -120,6 +123,7 @@ func TestDamastRepoBoundPackages(t *testing.T) {
 // Actions task 47 (fixtures) runs in user5/repo4.
 func TestDamastActionsTokenPackages(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 
@@ -162,6 +166,7 @@ func TestDamastActionsTokenPackages(t *testing.T) {
 // Phase 2: with a private owner, repository access is the only way to read a package.
 func TestDamastRepoBoundPackageRead(t *testing.T) {
 	defer tests.PrepareTestEnv(t)()
+	damastRepoWritersCreate(t, 5)
 	ctx := db.DefaultContext
 	require.NoError(t, db.Insert(ctx, &repo_model.RepoUnit{RepoID: 4, Type: unit.TypePackages}))
 	_, err := db.GetEngine(ctx).ID(5).Cols("visibility").Update(&user_model.User{Visibility: api.VisibleTypePrivate})

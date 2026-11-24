@@ -186,6 +186,10 @@ func servePackageFile(ctx *context.Context, params parameters, serveContent bool
 		}
 		return
 	}
+	if err := damast_packages.OnReadFile(ctx, pf); err != nil { // DAMAST: HEAD and checksums skip the file stream
+		apiError(ctx, http.StatusNotFound, packages_model.ErrPackageFileNotExist)
+		return
+	}
 
 	pb, err := packages_model.GetBlobByID(ctx, pf.BlobID)
 	if err != nil {

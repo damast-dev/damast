@@ -1,0 +1,4 @@
+{{/* DAMAST: "Draft" badge for draft pull requests (title has a WIP prefix). Args: Title (string), IsPull (bool) */}}
+{{- if DamastIsDraftPull .Title .IsPull -}}
+<span class="ui basic label damast-draft-badge" data-test-name="damast-draft-badge">{{svg "octicon-git-pull-request-draft" 14}} {{ctx.Locale.Tr "repo.issues.draft_title"}}</span>
+{{- end -}}

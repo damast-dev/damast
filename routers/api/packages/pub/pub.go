@@ -22,6 +22,7 @@ import (
 	"forgejo.org/modules/util"
 	"forgejo.org/routers/api/packages/helper"
 	"forgejo.org/services/context"
+	damast_packages "forgejo.org/services/damast/packages" // DAMAST:
 	packages_service "forgejo.org/services/packages"
 )
 
@@ -231,7 +232,10 @@ func FinalizePackage(ctx *context.Context) {
 	packageName := ctx.Params("id")
 	packageVersion := ctx.Params("version")
 
-	_, err := packages_model.GetVersionByNameAndVersion(ctx, ctx.Package.Owner.ID, packages_model.TypePub, packageName, packageVersion)
+	pv, err := packages_model.GetVersionByNameAndVersion(ctx, ctx.Package.Owner.ID, packages_model.TypePub, packageName, packageVersion)
+	if err == nil {
+		err = damast_packages.OnWriteVersion(ctx, pv, ctx.Doer) // DAMAST: repo-bound packages
+	}
 	if err != nil {
 		if err == packages_model.ErrPackageNotExist {
 			apiError(ctx, http.StatusNotFound, err)
