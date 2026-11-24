@@ -1026,6 +1026,11 @@ func Routes() *web.Route {
 							Patch(reqToken(), bind(api.EditPullRequestOption{}), repo.EditPullRequest)
 						m.Get(".{diffType:diff|patch}", repo.DownloadPullDiffOrPatch)
 						m.Post("/update", reqToken(), context.EnforceQuotaAPI(quota_model.LimitSubjectSizeGitAll, context.QuotaTargetRepo), repo.UpdatePullRequest)
+						m.Group("/damast/stack", func() { // DAMAST: stacked pull requests
+							m.Get("", repo.GetPullRequestDamastStack)
+							m.Post("/rebase", reqToken(), mustNotBeArchived(), bind(api.DamastStackActionOption{}), context.EnforceQuotaAPI(quota_model.LimitSubjectSizeGitAll, context.QuotaTargetRepo), repo.DamastRebasePullRequestStack)
+							m.Post("/merge", reqToken(), mustNotBeArchived(), bind(api.DamastStackActionOption{}), context.EnforceQuotaAPI(quota_model.LimitSubjectSizeGitAll, context.QuotaTargetRepo), repo.DamastMergePullRequestStack)
+						})
 						m.Get("/commits", repo.GetPullRequestCommits)
 						m.Get("/files", repo.GetPullRequestFiles)
 						m.Combo("/merge").Get(repo.IsPullRequestMerged).

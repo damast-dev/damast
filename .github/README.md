@@ -101,6 +101,19 @@ Not yet: file attachments in advisories, temporary private forks, requesting a C
 - You only commit what you've seen: a suggestion edited after you loaded it is refused. LFS pointers, files too large for the web editor, suggestions over 64 KiB and batches over 100 suggestions are refused too.
 - The API has it too: `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/suggestions` lists suggestions, `POST …/damast/suggestions/apply` commits them (with the `content_version` of each one from the list), and [`mast pr suggestions`](https://github.com/damast-dev/mast) uses both. A token limited to some repositories or to public ones must cover the pull request's head repository.
 
+### Stacked pull requests
+
+**On Forgejo:** a pull request can target another pull request's branch, but nothing connects them. You keep track of the order yourself, rebase every branch by hand after a review fix lower down, and merge one by one. Merge the bottom one without deleting its branch and the next one keeps pointing at a branch that's already in `main`.
+
+**On Damast:** split a big change into small pull requests that build on each other, like GitHub's stacked pull requests, and review each layer on its own.
+
+- **Stack map.** Every pull request in a stack shows the whole stack above its conversation, commits and files: each layer with title, number, draft state and checks, and where you are. When two pull requests build on the same layer, the map is a tree, not a line.
+- **Nothing to set up.** A pull request is a layer when its base branch is the head branch of another open pull request in the same repository. Damast reads the stack from the branches, so nothing is stored for the stack itself and nothing is left behind if you go back to Forgejo. Pull requests from forks are never layers, and neither is a pull request whose head branch is the default branch or a protected branch: those end a stack like a trunk (so "sync `main` into my branch" is just a pull request). A stack has at most 100 pull requests, fan-out included. A bigger or circular stack is shown as far as it goes with a notice, and rebase and merge are refused (API: `truncated`, `409`).
+- **Merge the bottom, the rest follows.** Like on GitHub, the layers on top of a merged pull request are retargeted to its base branch when its head branch is deleted: with "delete branch after merge", or when you delete the branch later while they are still open, with a note in their timeline. Merging alone changes nothing, so a pull request into `develop` stays on `develop` when `develop` is merged into `main` and kept. Follows `[repository.pull-request] RETARGET_CHILDREN_ON_MERGE` (on by default).
+- **Rebase stack.** One button rebases every layer onto the layer below it, and the bottom one onto its base branch. Each layer is rebased with `git rebase --onto`, from the parent commit it was built on, so a squash-merged or rewritten parent doesn't replay its old commits into conflicts (the commit is kept in the `damast_stack_base` table; a lone layer whose parent was merged can be rebased too). It is only there if you may update every layer by rebase (branch protection and the repository's rebase-update setting count), and it never force-pushes the default branch or a protected branch. Each force-push only goes through if the branch is still where it was when you loaded the page, and the run stops at the first conflict and tells you which layer and commit.
+- **Merge up to here.** Merges every layer from the bottom up to the one you're looking at, one after another, each through the normal merge: reviews, required checks, protected branches, drafts and dependencies apply per layer. It stops at the first layer that can't be merged and says why; the layers above it stay open.
+- **API and CLI.** `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/stack`, plus `POST …/damast/stack/rebase` and `…/damast/stack/merge`. In [`mast`](https://github.com/damast-dev/mast): `mast pr stack`, `mast pr stack push`, `mast pr stack sync` and `mast pr stack merge`.
+
 ### Green, like the button you already know
 
 **On Forgejo:** the accent colour is orange.
@@ -162,6 +175,7 @@ What you lose:
 | Repo-bound packages | Packages, files and their repository link stay. Access falls back to Forgejo's owner rules, so people who could only publish or download through the repository lose that. Check this before you switch. |
 | Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
 | Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
+| Stacked pull requests | The pull requests and their base branches stay. The stack map and the stack buttons are gone, and a merged layer's children are retargeted when you delete its branch, as before. The only data is the `damast_stack_base` table (parent commits for `--onto` rebases; removed with their pull request or repository), which Forgejo ignores. |
 | Green theme | Everyone sees the theme stored in their account again: `forgejo-auto` for accounts from before Damast, Forgejo's default theme for accounts on a `damast-*` theme. Damast only changes the stored theme when someone picks one. If you set `damast-*` in `[ui] DEFAULT_THEME` or `THEMES` in `app.ini`, remove it first: Forgejo has no such stylesheet and would show pages unstyled. |
 
 Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
@@ -200,6 +214,7 @@ The direction is GitHub's way of working, inside the limits of the drop-in promi
 - File tree next to the code: folders load as you open them, clicks swap only the content
 - Draft pull requests: create as draft, Draft badge, Ready for review, code owners asked when ready
 - Suggested changes in reviews: commit one or a batch, reviewers credited as co-authors
+- Stacked pull requests: stack map, retarget on merge, rebase stack, merge up to here, API and `mast pr stack`
 - Damast's own name and logo
 - Security tab: security policy, private vulnerability reporting, repository security advisories, OSV export
 - Releases with release candidates, binaries for amd64 and arm64, Docker images

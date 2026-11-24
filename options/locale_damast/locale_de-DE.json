@@ -159,5 +159,26 @@
 	"damast.suggestions.err_edited": "Ein Vorschlag wurde bearbeitet. Lade die Seite neu und versuche es noch einmal.",
 	"themes.names.damast-auto": "Damast (Systemdesign folgen)",
 	"themes.names.damast-light": "Damast hell",
-	"themes.names.damast-dark": "Damast dunkel"
+	"themes.names.damast-dark": "Damast dunkel",
+	"damast.stack.title": {
+		"one": "Stapel aus %d Pull-Request",
+		"other": "Stapel aus %d Pull-Requests"
+	},
+	"damast.stack.trunk": "Stamm-Branch",
+	"damast.stack.current": "dieser Pull-Request",
+	"damast.stack.checks": "Checks: %s",
+	"damast.stack.rebase": "Stapel rebasen",
+	"damast.stack.rebase_help": "Setzt jede Ebene per Rebase auf die Ebene darunter und die unterste Ebene auf %s. Hält beim ersten Konflikt an.",
+	"damast.stack.merge": "Bis hier mergen",
+	"damast.stack.merge_desc": "Mergt %[1]s nacheinander in %[2]s (%[3]s). Jede Ebene muss ihre eigenen Checks, Reviews und Branch-Schutzregeln erfüllen; der Lauf hält bei der ersten Ebene an, die nicht gemergt werden kann, und die Ebenen darüber bleiben offen.",
+	"damast.stack.rebased": "%s per Rebase aktualisiert.",
+	"damast.stack.merged": "%s gemergt.",
+	"damast.stack.nothing_to_do": "Der Stapel ist bereits aktuell.",
+	"damast.stack.stopped_at": "Angehalten bei #%d: %s",
+	"damast.stack.reason_rebase_conflict": "beim Rebase von Commit %s ist ein Konflikt aufgetreten. Setze diese Ebene lokal neu auf, pushe sie und rebase den Stapel dann erneut.",
+	"damast.stack.reason_moved": "der Pull-Request hat sich geändert, seit die Seite geladen wurde. Lade sie neu und versuche es noch einmal.",
+	"damast.stack.reason_internal": "ein interner Fehler ist aufgetreten. Details stehen im Server-Log.",
+	"damast.stack.reason_truncated": "der Stapel hat mehr als %d Pull-Requests oder ist zirkulär. Teile ihn auf oder korrigiere die Branches und versuche es dann erneut.",
+	"damast.stack.reason_protected": "der Standard-Branch und geschützte Branches gehören nicht zu einer Stapel-Aktion.",
+	"damast.stack.truncated": "Dieser Stapel hat mehr als 100 Pull-Requests oder ist zirkulär, daher ist nur ein Teil zu sehen. Rebase und Merge werden nicht angeboten."
 }

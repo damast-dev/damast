@@ -4,6 +4,7 @@
 package swagger
 
 import (
+	api "forgejo.org/modules/structs"
 	"forgejo.org/routers/api/v1/packages"
 )
 
@@ -19,4 +20,25 @@ type swaggerResponseDamastOwnerPackageSettings struct {
 type swaggerResponseDamastPackageSettings struct {
 	// in:body
 	Body packages.DamastPackageSettings `json:"body"`
+}
+
+// DamastStack
+// swagger:response DamastStack
+type swaggerResponseDamastStack struct {
+	// in:body
+	Body api.DamastStack `json:"body"`
+}
+
+// DamastStackActionResult
+// swagger:response DamastStackActionResult
+type swaggerResponseDamastStackActionResult struct {
+	// in:body
+	Body api.DamastStackActionResult `json:"body"`
+}
+
+// not actually a response, just a hack to get go-swagger to include the Damast option structs
+// swagger:response damastStackParameterBodies
+type swaggerDamastStackParameterBodies struct {
+	// in:body
+	DamastStackActionOption api.DamastStackActionOption
 }
