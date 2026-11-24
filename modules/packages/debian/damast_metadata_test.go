@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// GO-2026-6905: a negative ar member size made blakesmith/ar panic in Reader.Read.
+// GO-2026-6905: a negative ar member size made blakesmith/ar panic; upstream v17.0.2 parses with go-debian instead.
 func TestDamastParsePackageNegativeMemberSize(t *testing.T) {
 	var buf bytes.Buffer
 	buf.WriteString("!<arch>\n")
@@ -19,7 +19,7 @@ func TestDamastParsePackageNegativeMemberSize(t *testing.T) {
 	buf.WriteString("payload")
 
 	assert.NotPanics(t, func() {
-		_, err := ParsePackage(&buf)
-		assert.ErrorIs(t, err, ErrDamastInvalidArchive)
+		_, err := ParsePackage(bytes.NewReader(buf.Bytes()))
+		assert.Error(t, err)
 	})
 }

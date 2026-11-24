@@ -1,0 +1,29 @@
+/* Damast dark: Forgejo dark with a green accent instead of orange (GitHub's dark-mode greens).
+   Only the primary colours change; everything else comes from Forgejo. Like Forgejo, the primary is a
+   light colour with black text, because it is also the link colour on the dark background. */
+@import "./theme-forgejo-dark.css";
+
+:root {
+  --color-primary: #3fb950;
+  --color-primary-contrast: #000;
+  --color-primary-dark-1: #56d364;
+  --color-primary-dark-2: #56d364;
+  --color-primary-dark-3: #7ee787;
+  --color-primary-dark-4: #7ee787;
+  --color-primary-light-1: #2ea043;
+  --color-primary-light-2: #238636;
+  --color-primary-light-3: #196c2e;
+  --color-primary-light-4: #0f5323;
+  --color-primary-light-5: #0f5323;
+  --color-primary-light-6: #033a16;
+  --color-primary-light-7: #033a16;
+  --color-primary-alpha-10: #23863619;
+  --color-primary-alpha-20: #23863633;
+  --color-primary-alpha-30: #2386364b;
+  --color-primary-alpha-40: #23863666;
+  --color-primary-alpha-50: #23863680;
+  --color-primary-alpha-60: #23863699;
+  --color-primary-alpha-70: #238636b3;
+  --color-primary-alpha-80: #238636cc;
+  --color-primary-alpha-90: #238636e1;
+}

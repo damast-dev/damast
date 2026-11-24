@@ -114,6 +114,16 @@ Not yet: file attachments in advisories, temporary private forks, requesting a C
 - **Merge up to here.** Merges every layer from the bottom up to the one you're looking at, one after another, each through the normal merge: reviews, required checks, protected branches, drafts and dependencies apply per layer. It stops at the first layer that can't be merged and says why; the layers above it stay open.
 - **API and CLI.** `GET /api/v1/repos/{owner}/{repo}/pulls/{index}/damast/stack`, plus `POST …/damast/stack/rebase` and `…/damast/stack/merge`. In [`mast`](https://github.com/damast-dev/mast): `mast pr stack`, `mast pr stack push`, `mast pr stack sync` and `mast pr stack merge`.
 
+### Green, like the button you already know
+
+**On Forgejo:** the accent colour is orange.
+
+**On Damast:** the default theme is `damast-auto`: Forgejo's theme with a green accent from GitHub's palette, so "Create merge commit", links and the active tab look the way GitHub users expect. It follows your system's light or dark mode; `damast-light` and `damast-dark` are there too. Text on buttons and links meets WCAG AA contrast in both modes.
+
+- Everyone gets green, including accounts from before the switch: Forgejo saves `forgejo-auto` with every account, and Damast shows that as `damast-auto`. Picking `forgejo-auto` again in **Settings → Appearance** brings orange back for good (Damast remembers that choice in its own table). Any other theme you picked, like `forgejo-dark`, stays as it is.
+- All of Forgejo's themes stay available. Green and red are hard to tell apart with red-green colour blindness: pick `forgejo-auto-deuteranopia-protanopia` there.
+- If your `app.ini` lists its own `[ui] THEMES` without the Damast themes and sets no `DEFAULT_THEME`, nothing changes: the default stays `forgejo-auto`. To make green the default for everyone, set `DEFAULT_THEME = damast-auto` and add `damast-auto,damast-light,damast-dark` to `THEMES`.
+
 ### Its own name
 
 Damast says Damast in the UI, with its own logo, and still links to Forgejo in the footer. Forgejo's name and logo are Forgejo's trademark, so a fork that ships its own changes shouldn't use them.
@@ -166,6 +176,7 @@ What you lose:
 | Who may create new packages | The owner setting lives in `damast_owner_package_policy`; Forgejo ignores it, so only owner-level package writers create packages, as with the default. |
 | Security advisories | The Security tab, private reports, drafts and their discussions are gone (Forgejo can't show them; the data stays in `damast_*` tables until you drop them). `SECURITY.md` stays in your repository. **Export published advisories first**, see below. |
 | Stacked pull requests | The pull requests and their base branches stay. The stack map and the stack buttons are gone, and a merged layer's children are retargeted when you delete its branch, as before. The only data is the `damast_stack_base` table (parent commits for `--onto` rebases; removed with their pull request or repository), which Forgejo ignores. |
+| Green theme | Everyone sees the theme stored in their account again: `forgejo-auto` for accounts from before Damast, Forgejo's default theme for accounts on a `damast-*` theme. Damast only changes the stored theme when someone picks one. If you set `damast-*` in `[ui] DEFAULT_THEME` or `THEMES` in `app.ini`, remove it first: Forgejo has no such stylesheet and would show pages unstyled. |
 
 Export the published advisories of a repository as OSV JSON before you switch, with a token that can read the repository:
 

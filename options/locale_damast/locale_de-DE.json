@@ -157,6 +157,9 @@
 	"damast.suggestions.err_outdated": "Der Code hat sich seit diesem Vorschlag geändert, deshalb kann er nicht mehr übernommen werden.",
 	"damast.suggestions.err_overlap": "Einige Vorschläge in diesem Stapel ändern dieselben Zeilen. Committe sie einzeln.",
 	"damast.suggestions.err_edited": "Ein Vorschlag wurde bearbeitet. Lade die Seite neu und versuche es noch einmal.",
+	"themes.names.damast-auto": "Damast (Systemdesign folgen)",
+	"themes.names.damast-light": "Damast hell",
+	"themes.names.damast-dark": "Damast dunkel",
 	"damast.stack.title": {
 		"one": "Stapel aus %d Pull-Request",
 		"other": "Stapel aus %d Pull-Requests"

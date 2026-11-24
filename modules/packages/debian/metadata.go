@@ -6,7 +6,7 @@ package debian
 import (
 	"archive/tar"
 	"bufio"
-	"compress/gzip"
+	"errors"
 	"io"
 	"net/mail"
 	"regexp"
@@ -14,10 +14,8 @@ import (
 
 	"forgejo.org/modules/util"
 	"forgejo.org/modules/validation"
-	"forgejo.org/modules/zstd"
 
-	"github.com/blakesmith/ar"
-	"github.com/ulikunitz/xz"
+	"pault.ag/go/debian/deb"
 )
 
 const (
@@ -66,8 +64,13 @@ type Metadata struct {
 
 // ParsePackage parses the Debian package file
 // https://manpages.debian.org/bullseye/dpkg-dev/deb.5.en.html
-func ParsePackage(r io.Reader) (*Package, error) {
-	arr := ar.NewReader(r)
+func ParsePackage(r io.ReaderAt) (*Package, error) {
+	// we could call deb.Load() directly but as of go-debian@v0.21.4 the result is
+	// quite different from the hand-rolled ParseControlFile below
+	arr, err := deb.LoadAr(r)
+	if err != nil {
+		return nil, util.NewInvalidArgumentErrorf("invalid ar file: %v", err)
+	}
 
 	for {
 		hd, err := arr.Next()
@@ -77,65 +80,55 @@ func ParsePackage(r io.Reader) (*Package, error) {
 		if err != nil {
 			return nil, err
 		}
-		if hd.Size < 0 { // DAMAST: GO-2026-6905, blakesmith/ar panics on negative member sizes (no upstream fix)
-			return nil, ErrDamastInvalidArchive
+
+		suffix, ok := strings.CutPrefix(hd.Name, controlTar)
+		if !ok {
+			continue
 		}
 
-		if strings.HasPrefix(hd.Name, controlTar) {
-			var inner io.Reader
-			// https://man7.org/linux/man-pages/man5/deb-split.5.html#FORMAT
-			// The file names might contain a trailing slash (since dpkg 1.15.6).
-			switch strings.TrimSuffix(hd.Name[len(controlTar):], "/") {
-			case "":
-				inner = arr
-			case ".gz":
-				gzr, err := gzip.NewReader(arr)
-				if err != nil {
-					return nil, err
-				}
-				defer gzr.Close()
+		switch suffix {
+		case "", ".gz", ".xz", ".zst":
+			break
+		default:
+			// manually check the extension since hd.Tarfile() tries to read
+			// unknown extensions as uncompressed tar
+			return nil, ErrUnsupportedCompression
+		}
 
-				inner = gzr
-			case ".xz":
-				xzr, err := xz.NewReader(arr)
-				if err != nil {
-					return nil, err
-				}
-
-				inner = xzr
-			case ".zst":
-				zr, err := zstd.NewReader(arr)
-				if err != nil {
-					return nil, err
-				}
-				defer zr.Close()
-
-				inner = zr
-			default:
-				return nil, ErrUnsupportedCompression
-			}
-
-			tr := tar.NewReader(inner)
-			for {
-				hd, err := tr.Next()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					return nil, err
-				}
-
-				if hd.Typeflag != tar.TypeReg {
-					continue
-				}
-
-				if hd.FileInfo().Name() == "control" {
-					return ParseControlFile(tr)
-				}
-			}
+		if p, err := findControlFile(hd); err == nil {
+			// found and parsed the `control` entry
+			return p, nil
+		} else if !errors.Is(err, ErrMissingControlFile) {
+			return nil, err
 		}
 	}
 
+	return nil, ErrMissingControlFile
+}
+
+func findControlFile(hd *deb.ArEntry) (*Package, error) {
+	tr, closer, err := hd.Tarfile()
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	for {
+		hd, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if hd.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		if hd.FileInfo().Name() == "control" {
+			return ParseControlFile(tr)
+		}
+	}
 	return nil, ErrMissingControlFile
 }
 
